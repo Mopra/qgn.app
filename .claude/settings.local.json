@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rustc:*)",
+      "Bash(cargo --version:*)",
+      "Bash(npm install:*)",
+      "Bash(cmd.exe /c \"rustc --version && cargo --version\")",
+      "Bash(winget install:*)",
+      "Bash(cmd.exe /c \"where rustup 2>nul || dir /s /b C:\\\\Users\\\\morte\\\\.rustup\\\\*.exe 2>nul | head -5 || dir /s /b C:\\\\Users\\\\morte\\\\.cargo\\\\bin\\\\*.exe 2>nul | head -5\")",
+      "Bash(/c/Users/morte/.cargo/bin/rustc.exe:*)",
+      "Bash(/c/Users/morte/.cargo/bin/cargo.exe:*)",
+      "Bash(PATH=\"/c/Users/morte/.cargo/bin:$PATH\" npm run tauri dev:*)",
+      "Bash(where npm:*)",
+      "Bash(PATH=\"/c/Program Files/nodejs:/c/Users/morte/.cargo/bin:$PATH\" npm run tauri:*)",
+      "Bash(cmd.exe /c \"taskkill /F /IM node.exe 2>nul & taskkill /F /IM qgn.exe 2>nul & echo cleaned\")",
+      "Bash(netstat:*)",
+      "Bash(cmd.exe /c \"taskkill /F /PID 5500\")",
+      "Bash(cmd.exe /c \"tasklist /FI \"\"PID eq 5500\"\"\")",
+      "Bash(PATH=\"/c/Program Files/nodejs:/c/Users/morte/.cargo/bin:$PATH\" cargo build:*)",
+      "Bash(PATH=\"/c/Program Files/nodejs:/c/Users/morte/.cargo/bin:$PATH\" npm run build:*)",
+      "Bash(PATH=\"/c/Program Files/nodejs:/c/Users/morte/.cargo/bin:$PATH\" npm run tauri build:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill /PID 5500 /F)",
+      "Bash(cmd /c \"taskkill /PID 5500 /F\")",
+      "Bash(powershell -Command \"Stop-Process -Id 5500 -Force\")",
+      "Bash(npm run tauri:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(cmd /c \"dir /s C:\\\\Users\\\\morte\\\\Documents\\\\GitHub\\\\qgn.app\\\\src-tauri\\\\target 2>nul | findstr /C:\"\"File\\(s\\)\"\"\")",
+      "Bash(cmd /c \"rmdir /s /q C:\\\\Users\\\\morte\\\\Documents\\\\GitHub\\\\qgn.app\\\\src-tauri\\\\target\")",
+      "Bash(wmic:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)"
+    ]
+  }
+}
