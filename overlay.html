@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+        user-select: none;
+        cursor: crosshair;
+      }
+
+      #overlay {
+        position: fixed;
+        inset: 0;
+      }
+
+      .dim {
+        position: absolute;
+        background: rgba(0, 0, 0, 0.4);
+      }
+
+      .dim-top {
+        top: 0;
+        left: 0;
+        right: 0;
+      }
+
+      .dim-bottom {
+        left: 0;
+        right: 0;
+        bottom: 0;
+      }
+
+      .dim-left {
+        left: 0;
+      }
+
+      .dim-right {
+        right: 0;
+      }
+
+      .selection {
+        position: absolute;
+        border: 2px solid #fff;
+        pointer-events: none;
+      }
+
+      .dimensions {
+        position: absolute;
+        bottom: -24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.7);
+        color: #fff;
+        font-family: system-ui, sans-serif;
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 3px;
+        white-space: nowrap;
+      }
+
+      .instructions {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #fff;
+        font-family: system-ui, sans-serif;
+        font-size: 18px;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 12px 24px;
+        border-radius: 8px;
+        pointer-events: none;
+      }
+
+      .no-selection {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="overlay"></div>
+    <script>
+      const overlay = document.getElementById("overlay");
+
+      let isSelecting = false;
+      let startX = 0;
+      let startY = 0;
+      let endX = 0;
+      let endY = 0;
+
+      function getRect() {
+        const x = Math.min(startX, endX);
+        const y = Math.min(startY, endY);
+        const w = Math.abs(endX - startX);
+        const h = Math.abs(endY - startY);
+        return { x, y, width: w, height: h };
+      }
+
+      function render() {
+        if (!isSelecting && startX === 0 && startY === 0) {
+          overlay.innerHTML = `
+            <div class="no-selection"></div>
+            <div class="instructions">Click and drag to select area. Press ESC to cancel.</div>
+          `;
+          return;
+        }
+
+        const r = getRect();
+        if (r.width < 2 && r.height < 2) {
+          overlay.innerHTML = `<div class="no-selection"></div>`;
+          return;
+        }
+
+        overlay.innerHTML = `
+          <div class="dim dim-top" style="height:${r.y}px"></div>
+          <div class="dim dim-left" style="top:${r.y}px;height:${r.height}px;width:${r.x}px"></div>
+          <div class="dim dim-right" style="top:${r.y}px;height:${r.height}px;left:${r.x + r.width}px"></div>
+          <div class="dim dim-bottom" style="top:${r.y + r.height}px"></div>
+          <div class="selection" style="left:${r.x}px;top:${r.y}px;width:${r.width}px;height:${r.height}px">
+            <div class="dimensions">${Math.round(r.width)} × ${Math.round(r.height)}</div>
+          </div>
+        `;
+      }
+
+      document.addEventListener("mousedown", (e) => {
+        isSelecting = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        endX = e.clientX;
+        endY = e.clientY;
+        render();
+      });
+
+      document.addEventListener("mousemove", (e) => {
+        if (!isSelecting) return;
+        endX = e.clientX;
+        endY = e.clientY;
+        render();
+      });
+
+      document.addEventListener("mouseup", () => {
+        if (!isSelecting) return;
+        isSelecting = false;
+
+        const r = getRect();
+        if (r.width < 5 || r.height < 5) {
+          reset();
+          return;
+        }
+
+        window.qgn.capture(r);
+        clear();
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          window.qgn.cancel();
+          clear();
+        }
+      });
+
+      function reset() {
+        isSelecting = false;
+        startX = 0;
+        startY = 0;
+        endX = 0;
+        endY = 0;
+        render();
+      }
+
+      function clear() {
+        isSelecting = false;
+        startX = 0;
+        startY = 0;
+        endX = 0;
+        endY = 0;
+        overlay.innerHTML = "";
+      }
+    </script>
+  </body>
+</html>

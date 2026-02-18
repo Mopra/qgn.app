@@ -30,7 +30,13 @@
       "Bash(wmic:*)",
       "WebFetch(domain:github.com)",
       "Bash(git init:*)",
-      "Bash(git remote add:*)"
+      "Bash(git remote add:*)",
+      "Bash(cargo search:*)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:crates.io)",
+      "WebFetch(domain:lib.rs)",
+      "Bash(cargo build:*)"
     ]
   }
 }
