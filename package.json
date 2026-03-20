@@ -1,7 +1,7 @@
 {
   "name": "qgn",
   "productName": "QGN",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Quick screenshot capture tool",
   "author": "Mopra",
   "main": "main.js",
