@@ -1,9 +1,11 @@
 name: Build & Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (e.g. v0.2.0)"
+        required: true
 
 permissions:
   contents: write
@@ -14,6 +16,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
 
       - uses: actions/setup-node@v4
         with:

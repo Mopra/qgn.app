@@ -1,4 +1,4 @@
-name: Auto Version Bump
+name: Auto Version Bump & Release
 
 on:
   push:
@@ -12,9 +12,8 @@ permissions:
   contents: write
 
 jobs:
-  bump:
-    runs-on: ubuntu-latest
-    # Skip bumps triggered by the bot's own version commit
+  bump-and-release:
+    runs-on: windows-latest
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
 
     steps:
@@ -23,17 +22,29 @@ jobs:
           token: ${{ secrets.PAT }}
           persist-credentials: true
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.PAT }}@github.com/Mopra/qgn.app.git
 
       - name: Bump patch version, commit, and tag
         run: |
-          NEW_VERSION=$(npm version patch -m "v%s [skip ci]")
-          echo "NEW_VERSION=$NEW_VERSION" >> "$GITHUB_ENV"
+          $NEW_VERSION = npm version patch -m "v%s [skip ci]"
+          echo "NEW_VERSION=$NEW_VERSION" >> $env:GITHUB_ENV
+        shell: pwsh
 
       - name: Push version commit and tag
-        run: |
-          git push origin main --follow-tags
+        run: git push origin main --follow-tags
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and publish
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
