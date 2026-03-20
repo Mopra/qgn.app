@@ -1,0 +1,284 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 950">
+  <style>
+    text { font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif; }
+  </style>
+
+  <rect width="1200" height="950" fill="#fafafa"/>
+  <text x="600" y="40" font-size="14" fill="#999" font-weight="500" letter-spacing="2" text-anchor="middle">SUNBURST — COLOR EXPLORATIONS</text>
+
+  <!-- ==================== COLOR 1: ELECTRIC INDIGO ==================== -->
+  <text x="155" y="85" font-size="12" fill="#999" font-weight="500" letter-spacing="1" text-anchor="middle">ELECTRIC INDIGO</text>
+
+  <g transform="translate(90, 100)">
+    <g transform="translate(65, 65)">
+      <circle cx="0" cy="0" r="14" fill="#5B5BF0"/>
+      <line x1="0" y1="-38" x2="0" y2="-22" stroke="#5B5BF0" stroke-width="7" stroke-linecap="round"/>
+      <line x1="0" y1="22" x2="0" y2="38" stroke="#5B5BF0" stroke-width="7" stroke-linecap="round"/>
+      <line x1="-38" y1="0" x2="-22" y2="0" stroke="#5B5BF0" stroke-width="7" stroke-linecap="round"/>
+      <line x1="22" y1="0" x2="38" y2="0" stroke="#5B5BF0" stroke-width="7" stroke-linecap="round"/>
+      <line x1="-27" y1="-27" x2="-17" y2="-17" stroke="#5B5BF0" stroke-width="5" stroke-linecap="round"/>
+      <line x1="17" y1="-17" x2="27" y2="-27" stroke="#5B5BF0" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-27" y1="27" x2="-17" y2="17" stroke="#5B5BF0" stroke-width="5" stroke-linecap="round"/>
+      <line x1="17" y1="17" x2="27" y2="27" stroke="#5B5BF0" stroke-width="5" stroke-linecap="round"/>
+    </g>
+    <!-- Lockup -->
+    <text x="0" y="160" font-size="28" font-weight="700" fill="#1a1a1a" letter-spacing="-0.5" text-anchor="start">Quick Gen</text>
+    <text x="0" y="180" font-size="11" fill="#999" letter-spacing="2">qgn.app</text>
+    <!-- Favicon -->
+    <rect x="95" y="145" width="36" height="36" rx="8" fill="#5B5BF0"/>
+    <g transform="translate(113, 163)">
+      <circle cx="0" cy="0" r="3.5" fill="#fff"/>
+      <line x1="0" y1="-11" x2="0" y2="-6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="0" y1="6" x2="0" y2="11" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="-11" y1="0" x2="-6" y2="0" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="6" y1="0" x2="11" y2="0" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="-8" y1="-8" x2="-5" y2="-5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="5" y1="-5" x2="8" y2="-8" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="-8" y1="8" x2="-5" y2="5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="5" y1="5" x2="8" y2="8" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+    </g>
+    <!-- Swatch -->
+    <rect x="0" y="200" width="20" height="20" rx="4" fill="#5B5BF0"/>
+    <text x="28" y="215" font-size="11" fill="#999">#5B5BF0</text>
+  </g>
+
+  <!-- ==================== COLOR 2: GOLDEN AMBER ==================== -->
+  <text x="470" y="85" font-size="12" fill="#999" font-weight="500" letter-spacing="1" text-anchor="middle">GOLDEN AMBER</text>
+
+  <g transform="translate(405, 100)">
+    <g transform="translate(65, 65)">
+      <circle cx="0" cy="0" r="14" fill="#E5A32B"/>
+      <line x1="0" y1="-38" x2="0" y2="-22" stroke="#E5A32B" stroke-width="7" stroke-linecap="round"/>
+      <line x1="0" y1="22" x2="0" y2="38" stroke="#E5A32B" stroke-width="7" stroke-linecap="round"/>
+      <line x1="-38" y1="0" x2="-22" y2="0" stroke="#E5A32B" stroke-width="7" stroke-linecap="round"/>
+      <line x1="22" y1="0" x2="38" y2="0" stroke="#E5A32B" stroke-width="7" stroke-linecap="round"/>
+      <line x1="-27" y1="-27" x2="-17" y2="-17" stroke="#E5A32B" stroke-width="5" stroke-linecap="round"/>
+      <line x1="17" y1="-17" x2="27" y2="-27" stroke="#E5A32B" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-27" y1="27" x2="-17" y2="17" stroke="#E5A32B" stroke-width="5" stroke-linecap="round"/>
+      <line x1="17" y1="17" x2="27" y2="27" stroke="#E5A32B" stroke-width="5" stroke-linecap="round"/>
+    </g>
+    <text x="0" y="160" font-size="28" font-weight="700" fill="#1a1a1a" letter-spacing="-0.5" text-anchor="start">Quick Gen</text>
+    <text x="0" y="180" font-size="11" fill="#999" letter-spacing="2">qgn.app</text>
+    <rect x="95" y="145" width="36" height="36" rx="8" fill="#E5A32B"/>
+    <g transform="translate(113, 163)">
+      <circle cx="0" cy="0" r="3.5" fill="#fff"/>
+      <line x1="0" y1="-11" x2="0" y2="-6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="0" y1="6" x2="0" y2="11" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="-11" y1="0" x2="-6" y2="0" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="6" y1="0" x2="11" y2="0" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="-8" y1="-8" x2="-5" y2="-5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="5" y1="-5" x2="8" y2="-8" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="-8" y1="8" x2="-5" y2="5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="5" y1="5" x2="8" y2="8" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+    </g>
+    <rect x="0" y="200" width="20" height="20" rx="4" fill="#E5A32B"/>
+    <text x="28" y="215" font-size="11" fill="#999">#E5A32B</text>
+  </g>
+
+  <!-- ==================== COLOR 3: TEAL GREEN ==================== -->
+  <text x="785" y="85" font-size="12" fill="#999" font-weight="500" letter-spacing="1" text-anchor="middle">TEAL</text>
+
+  <g transform="translate(720, 100)">
+    <g transform="translate(65, 65)">
+      <circle cx="0" cy="0" r="14" fill="#1DB88E"/>
+      <line x1="0" y1="-38" x2="0" y2="-22" stroke="#1DB88E" stroke-width="7" stroke-linecap="round"/>
+      <line x1="0" y1="22" x2="0" y2="38" stroke="#1DB88E" stroke-width="7" stroke-linecap="round"/>
+      <line x1="-38" y1="0" x2="-22" y2="0" stroke="#1DB88E" stroke-width="7" stroke-linecap="round"/>
+      <line x1="22" y1="0" x2="38" y2="0" stroke="#1DB88E" stroke-width="7" stroke-linecap="round"/>
+      <line x1="-27" y1="-27" x2="-17" y2="-17" stroke="#1DB88E" stroke-width="5" stroke-linecap="round"/>
+      <line x1="17" y1="-17" x2="27" y2="-27" stroke="#1DB88E" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-27" y1="27" x2="-17" y2="17" stroke="#1DB88E" stroke-width="5" stroke-linecap="round"/>
+      <line x1="17" y1="17" x2="27" y2="27" stroke="#1DB88E" stroke-width="5" stroke-linecap="round"/>
+    </g>
+    <text x="0" y="160" font-size="28" font-weight="700" fill="#1a1a1a" letter-spacing="-0.5" text-anchor="start">Quick Gen</text>
+    <text x="0" y="180" font-size="11" fill="#999" letter-spacing="2">qgn.app</text>
+    <rect x="95" y="145" width="36" height="36" rx="8" fill="#1DB88E"/>
+    <g transform="translate(113, 163)">
+      <circle cx="0" cy="0" r="3.5" fill="#fff"/>
+      <line x1="0" y1="-11" x2="0" y2="-6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="0" y1="6" x2="0" y2="11" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="-11" y1="0" x2="-6" y2="0" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="6" y1="0" x2="11" y2="0" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="-8" y1="-8" x2="-5" y2="-5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="5" y1="-5" x2="8" y2="-8" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="-8" y1="8" x2="-5" y2="5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="5" y1="5" x2="8" y2="8" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+    </g>
+    <rect x="0" y="200" width="20" height="20" rx="4" fill="#1DB88E"/>
+    <text x="28" y="215" font-size="11" fill="#999">#1DB88E</text>
+  </g>
+
+  <!-- ==================== COLOR 4: HOT MAGENTA ==================== -->
+  <text x="1070" y="85" font-size="12" fill="#999" font-weight="500" letter-spacing="1" text-anchor="middle">HOT MAGENTA</text>
+
+  <g transform="translate(1005, 100)">
+    <g transform="translate(65, 65)">
+      <circle cx="0" cy="0" r="14" fill="#D946C7"/>
+      <line x1="0" y1="-38" x2="0" y2="-22" stroke="#D946C7" stroke-width="7" stroke-linecap="round"/>
+      <line x1="0" y1="22" x2="0" y2="38" stroke="#D946C7" stroke-width="7" stroke-linecap="round"/>
+      <line x1="-38" y1="0" x2="-22" y2="0" stroke="#D946C7" stroke-width="7" stroke-linecap="round"/>
+      <line x1="22" y1="0" x2="38" y2="0" stroke="#D946C7" stroke-width="7" stroke-linecap="round"/>
+      <line x1="-27" y1="-27" x2="-17" y2="-17" stroke="#D946C7" stroke-width="5" stroke-linecap="round"/>
+      <line x1="17" y1="-17" x2="27" y2="-27" stroke="#D946C7" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-27" y1="27" x2="-17" y2="17" stroke="#D946C7" stroke-width="5" stroke-linecap="round"/>
+      <line x1="17" y1="17" x2="27" y2="27" stroke="#D946C7" stroke-width="5" stroke-linecap="round"/>
+    </g>
+    <text x="0" y="160" font-size="28" font-weight="700" fill="#1a1a1a" letter-spacing="-0.5" text-anchor="start">Quick Gen</text>
+    <text x="0" y="180" font-size="11" fill="#999" letter-spacing="2">qgn.app</text>
+    <rect x="95" y="145" width="36" height="36" rx="8" fill="#D946C7"/>
+    <g transform="translate(113, 163)">
+      <circle cx="0" cy="0" r="3.5" fill="#fff"/>
+      <line x1="0" y1="-11" x2="0" y2="-6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="0" y1="6" x2="0" y2="11" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="-11" y1="0" x2="-6" y2="0" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="6" y1="0" x2="11" y2="0" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <line x1="-8" y1="-8" x2="-5" y2="-5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="5" y1="-5" x2="8" y2="-8" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="-8" y1="8" x2="-5" y2="5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="5" y1="5" x2="8" y2="8" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+    </g>
+    <rect x="0" y="200" width="20" height="20" rx="4" fill="#D946C7"/>
+    <text x="28" y="215" font-size="11" fill="#999">#D946C7</text>
+  </g>
+
+  <!-- ==================== DARK MODE ROW ==================== -->
+  <text x="600" y="420" font-size="14" fill="#999" font-weight="500" letter-spacing="2" text-anchor="middle">DARK MODE PREVIEWS</text>
+
+  <g transform="translate(50, 440)">
+    <!-- Indigo dark -->
+    <rect x="0" y="0" width="260" height="90" rx="10" fill="#1a1a1a"/>
+    <g transform="translate(45, 45)">
+      <circle cx="0" cy="0" r="10" fill="#5B5BF0"/>
+      <line x1="0" y1="-26" x2="0" y2="-16" stroke="#5B5BF0" stroke-width="5" stroke-linecap="round"/>
+      <line x1="0" y1="16" x2="0" y2="26" stroke="#5B5BF0" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-26" y1="0" x2="-16" y2="0" stroke="#5B5BF0" stroke-width="5" stroke-linecap="round"/>
+      <line x1="16" y1="0" x2="26" y2="0" stroke="#5B5BF0" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-18" y1="-18" x2="-12" y2="-12" stroke="#5B5BF0" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="12" y1="-12" x2="18" y2="-18" stroke="#5B5BF0" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="-18" y1="18" x2="-12" y2="12" stroke="#5B5BF0" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="12" y1="12" x2="18" y2="18" stroke="#5B5BF0" stroke-width="3.5" stroke-linecap="round"/>
+    </g>
+    <text x="82" y="38" font-size="24" font-weight="700" fill="#fff" letter-spacing="-0.5">Quick Gen</text>
+    <text x="82" y="56" font-size="10" fill="#666" letter-spacing="2">qgn.app</text>
+
+    <!-- Amber dark -->
+    <rect x="280" y="0" width="260" height="90" rx="10" fill="#1a1a1a"/>
+    <g transform="translate(325, 45)">
+      <circle cx="0" cy="0" r="10" fill="#E5A32B"/>
+      <line x1="0" y1="-26" x2="0" y2="-16" stroke="#E5A32B" stroke-width="5" stroke-linecap="round"/>
+      <line x1="0" y1="16" x2="0" y2="26" stroke="#E5A32B" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-26" y1="0" x2="-16" y2="0" stroke="#E5A32B" stroke-width="5" stroke-linecap="round"/>
+      <line x1="16" y1="0" x2="26" y2="0" stroke="#E5A32B" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-18" y1="-18" x2="-12" y2="-12" stroke="#E5A32B" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="12" y1="-12" x2="18" y2="-18" stroke="#E5A32B" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="-18" y1="18" x2="-12" y2="12" stroke="#E5A32B" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="12" y1="12" x2="18" y2="18" stroke="#E5A32B" stroke-width="3.5" stroke-linecap="round"/>
+    </g>
+    <text x="362" y="38" font-size="24" font-weight="700" fill="#fff" letter-spacing="-0.5">Quick Gen</text>
+    <text x="362" y="56" font-size="10" fill="#666" letter-spacing="2">qgn.app</text>
+
+    <!-- Teal dark -->
+    <rect x="560" y="0" width="260" height="90" rx="10" fill="#1a1a1a"/>
+    <g transform="translate(605, 45)">
+      <circle cx="0" cy="0" r="10" fill="#1DB88E"/>
+      <line x1="0" y1="-26" x2="0" y2="-16" stroke="#1DB88E" stroke-width="5" stroke-linecap="round"/>
+      <line x1="0" y1="16" x2="0" y2="26" stroke="#1DB88E" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-26" y1="0" x2="-16" y2="0" stroke="#1DB88E" stroke-width="5" stroke-linecap="round"/>
+      <line x1="16" y1="0" x2="26" y2="0" stroke="#1DB88E" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-18" y1="-18" x2="-12" y2="-12" stroke="#1DB88E" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="12" y1="-12" x2="18" y2="-18" stroke="#1DB88E" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="-18" y1="18" x2="-12" y2="12" stroke="#1DB88E" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="12" y1="12" x2="18" y2="18" stroke="#1DB88E" stroke-width="3.5" stroke-linecap="round"/>
+    </g>
+    <text x="642" y="38" font-size="24" font-weight="700" fill="#fff" letter-spacing="-0.5">Quick Gen</text>
+    <text x="642" y="56" font-size="10" fill="#666" letter-spacing="2">qgn.app</text>
+
+    <!-- Magenta dark -->
+    <rect x="840" y="0" width="260" height="90" rx="10" fill="#1a1a1a"/>
+    <g transform="translate(885, 45)">
+      <circle cx="0" cy="0" r="10" fill="#D946C7"/>
+      <line x1="0" y1="-26" x2="0" y2="-16" stroke="#D946C7" stroke-width="5" stroke-linecap="round"/>
+      <line x1="0" y1="16" x2="0" y2="26" stroke="#D946C7" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-26" y1="0" x2="-16" y2="0" stroke="#D946C7" stroke-width="5" stroke-linecap="round"/>
+      <line x1="16" y1="0" x2="26" y2="0" stroke="#D946C7" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-18" y1="-18" x2="-12" y2="-12" stroke="#D946C7" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="12" y1="-12" x2="18" y2="-18" stroke="#D946C7" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="-18" y1="18" x2="-12" y2="12" stroke="#D946C7" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="12" y1="12" x2="18" y2="18" stroke="#D946C7" stroke-width="3.5" stroke-linecap="round"/>
+    </g>
+    <text x="922" y="38" font-size="24" font-weight="700" fill="#fff" letter-spacing="-0.5">Quick Gen</text>
+    <text x="922" y="56" font-size="10" fill="#666" letter-spacing="2">qgn.app</text>
+  </g>
+
+  <!-- ==================== ON WHITE BG APP ICON MOCKUPS ==================== -->
+  <text x="600" y="600" font-size="14" fill="#999" font-weight="500" letter-spacing="2" text-anchor="middle">APP ICON MOCKUPS</text>
+
+  <g transform="translate(135, 630)">
+    <!-- Indigo app icon -->
+    <rect x="0" y="0" width="100" height="100" rx="22" fill="#5B5BF0" filter="url(#shadow)"/>
+    <g transform="translate(50, 50)">
+      <circle cx="0" cy="0" r="8" fill="#fff"/>
+      <line x1="0" y1="-26" x2="0" y2="-14" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="0" y1="14" x2="0" y2="26" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="-26" y1="0" x2="-14" y2="0" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="14" y1="0" x2="26" y2="0" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="-18" y1="-18" x2="-11" y2="-11" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="11" y1="-11" x2="18" y2="-18" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="-18" y1="18" x2="-11" y2="11" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="11" y1="11" x2="18" y2="18" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+    </g>
+    <text x="50" y="130" font-size="12" fill="#666" text-anchor="middle">Quick Gen</text>
+  </g>
+
+  <g transform="translate(385, 630)">
+    <!-- Amber app icon -->
+    <rect x="0" y="0" width="100" height="100" rx="22" fill="#E5A32B"/>
+    <g transform="translate(50, 50)">
+      <circle cx="0" cy="0" r="8" fill="#fff"/>
+      <line x1="0" y1="-26" x2="0" y2="-14" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="0" y1="14" x2="0" y2="26" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="-26" y1="0" x2="-14" y2="0" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="14" y1="0" x2="26" y2="0" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="-18" y1="-18" x2="-11" y2="-11" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="11" y1="-11" x2="18" y2="-18" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="-18" y1="18" x2="-11" y2="11" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="11" y1="11" x2="18" y2="18" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+    </g>
+    <text x="50" y="130" font-size="12" fill="#666" text-anchor="middle">Quick Gen</text>
+  </g>
+
+  <g transform="translate(635, 630)">
+    <!-- Teal app icon -->
+    <rect x="0" y="0" width="100" height="100" rx="22" fill="#1DB88E"/>
+    <g transform="translate(50, 50)">
+      <circle cx="0" cy="0" r="8" fill="#fff"/>
+      <line x1="0" y1="-26" x2="0" y2="-14" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="0" y1="14" x2="0" y2="26" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="-26" y1="0" x2="-14" y2="0" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="14" y1="0" x2="26" y2="0" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="-18" y1="-18" x2="-11" y2="-11" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="11" y1="-11" x2="18" y2="-18" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="-18" y1="18" x2="-11" y2="11" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="11" y1="11" x2="18" y2="18" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+    </g>
+    <text x="50" y="130" font-size="12" fill="#666" text-anchor="middle">Quick Gen</text>
+  </g>
+
+  <g transform="translate(885, 630)">
+    <!-- Magenta app icon -->
+    <rect x="0" y="0" width="100" height="100" rx="22" fill="#D946C7"/>
+    <g transform="translate(50, 50)">
+      <circle cx="0" cy="0" r="8" fill="#fff"/>
+      <line x1="0" y1="-26" x2="0" y2="-14" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="0" y1="14" x2="0" y2="26" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="-26" y1="0" x2="-14" y2="0" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="14" y1="0" x2="26" y2="0" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="-18" y1="-18" x2="-11" y2="-11" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="11" y1="-11" x2="18" y2="-18" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="-18" y1="18" x2="-11" y2="11" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="11" y1="11" x2="18" y2="18" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+    </g>
+    <text x="50" y="130" font-size="12" fill="#666" text-anchor="middle">Quick Gen</text>
+  </g>
+
+</svg>

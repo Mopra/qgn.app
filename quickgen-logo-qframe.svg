@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+  <style>
+    text { font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif; }
+  </style>
+
+  <rect width="1200" height="800" fill="#fafafa"/>
+
+  <text x="600" y="45" font-size="14" fill="#999" font-weight="500" letter-spacing="2" text-anchor="middle">LOGO B — Q FRAME</text>
+
+  <!-- ==================== LARGE MARK ==================== -->
+  <g transform="translate(170, 70)">
+    <!-- Q as a bold rounded square with clear tail -->
+    <!-- Outer body -->
+    <rect x="0" y="0" width="180" height="170" rx="38" fill="#1a1a1a"/>
+    <!-- Inner screen cutout -->
+    <rect x="26" y="26" width="128" height="118" rx="20" fill="#fafafa"/>
+    <!-- Q tail — thick, bold, unmistakable -->
+    <line x1="135" y1="135" x2="195" y2="195" stroke="#1a1a1a" stroke-width="28" stroke-linecap="round"/>
+    <!-- Small capture dot in center of screen — subtle nod to recording -->
+    <circle cx="90" cy="85" r="14" fill="#1a1a1a" opacity="0.15"/>
+    <circle cx="90" cy="85" r="6" fill="#1a1a1a" opacity="0.3"/>
+  </g>
+
+  <!-- ==================== LOCKUP: MARK + WORDMARK ==================== -->
+  <g transform="translate(100, 360)">
+    <!-- Q mark at smaller scale -->
+    <g transform="translate(0, 0)">
+      <rect x="0" y="0" width="90" height="84" rx="20" fill="#1a1a1a"/>
+      <rect x="14" y="14" width="62" height="56" rx="10" fill="#fafafa"/>
+      <line x1="67" y1="67" x2="97" y2="97" stroke="#1a1a1a" stroke-width="14" stroke-linecap="round"/>
+      <circle cx="45" cy="42" r="3.5" fill="#1a1a1a" opacity="0.25"/>
+    </g>
+    <!-- Wordmark -->
+    <text x="115" y="40" font-size="46" font-weight="700" fill="#1a1a1a" letter-spacing="-1">Quick Gen</text>
+    <text x="115" y="68" font-size="16" font-weight="400" fill="#999" letter-spacing="3">qgn.app</text>
+  </g>
+
+  <!-- ==================== FAVICON ==================== -->
+  <g transform="translate(530, 360)">
+    <text x="28" y="-8" font-size="11" fill="#bbb" font-weight="500" text-anchor="middle">FAVICON</text>
+    <rect x="0" y="0" width="56" height="52" rx="12" fill="#1a1a1a"/>
+    <rect x="9" y="9" width="38" height="34" rx="6" fill="#fafafa"/>
+    <line x1="41" y1="41" x2="59" y2="59" stroke="#1a1a1a" stroke-width="9" stroke-linecap="round"/>
+    <circle cx="28" cy="26" r="2.5" fill="#1a1a1a" opacity="0.25"/>
+  </g>
+
+  <!-- ==================== ALTERNATE: THINNER WEIGHT ==================== -->
+  <g transform="translate(650, 80)">
+    <text x="85" y="-10" font-size="11" fill="#bbb" font-weight="500" text-anchor="middle" letter-spacing="1">LIGHT WEIGHT VARIANT</text>
+    <!-- Thinner stroked version -->
+    <rect x="0" y="0" width="170" height="160" rx="36" fill="none" stroke="#1a1a1a" stroke-width="12"/>
+    <!-- Q tail -->
+    <line x1="128" y1="128" x2="180" y2="180" stroke="#1a1a1a" stroke-width="12" stroke-linecap="round"/>
+    <!-- Center dot -->
+    <circle cx="85" cy="80" r="8" fill="#1a1a1a" opacity="0.2"/>
+  </g>
+
+  <!-- ==================== DARK MODE ==================== -->
+  <g transform="translate(100, 510)">
+    <text x="0" y="-10" font-size="11" fill="#bbb" font-weight="500" letter-spacing="1">DARK MODE</text>
+    <rect x="-20" y="0" width="700" height="110" rx="12" fill="#1a1a1a"/>
+
+    <!-- White Q mark -->
+    <g transform="translate(5, 10)">
+      <rect x="0" y="0" width="90" height="84" rx="20" fill="#ffffff"/>
+      <rect x="14" y="14" width="62" height="56" rx="10" fill="#1a1a1a"/>
+      <line x1="67" y1="67" x2="97" y2="97" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
+      <circle cx="45" cy="42" r="3.5" fill="#ffffff" opacity="0.2"/>
+    </g>
+    <!-- Wordmark -->
+    <text x="120" y="48" font-size="46" font-weight="700" fill="#ffffff" letter-spacing="-1">Quick Gen</text>
+    <text x="120" y="76" font-size="16" font-weight="400" fill="#666" letter-spacing="3">qgn.app</text>
+
+    <!-- Dark favicon -->
+    <g transform="translate(520, 27)">
+      <rect x="0" y="0" width="56" height="52" rx="12" fill="#ffffff"/>
+      <rect x="9" y="9" width="38" height="34" rx="6" fill="#1a1a1a"/>
+      <line x1="41" y1="41" x2="59" y2="59" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <!-- Color palette -->
+  <g transform="translate(100, 700)">
+    <text x="0" y="0" font-size="11" fill="#bbb" font-weight="500" letter-spacing="1">PALETTE</text>
+    <rect x="0" y="12" width="28" height="28" rx="5" fill="#1a1a1a"/>
+    <text x="36" y="31" font-size="12" fill="#999">#1A1A1A</text>
+    <rect x="130" y="12" width="28" height="28" rx="5" fill="#fafafa" stroke="#ddd"/>
+    <text x="166" y="31" font-size="12" fill="#999">#FAFAFA</text>
+  </g>
+</svg>

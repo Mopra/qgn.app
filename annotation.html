@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:">
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        height: 100%;
+        background: #1a1a1a;
+        overflow: hidden;
+        user-select: none;
+        font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+
+      /* ── Toolbar ── */
+      .toolbar {
+        height: 48px;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        gap: 8px;
+        background: rgba(28, 28, 28, 0.98);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        flex-shrink: 0;
+        -webkit-app-region: drag;
+      }
+      .toolbar > * { -webkit-app-region: no-drag; }
+
+      .tool-group { display: flex; gap: 2px; }
+      .tool-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.6);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.12s, color 0.12s;
+      }
+      .tool-btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .tool-btn.active {
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+      .tool-btn svg { width: 18px; height: 18px; }
+
+      .sep {
+        width: 1px;
+        height: 24px;
+        background: rgba(255, 255, 255, 0.06);
+        margin: 0 4px;
+        flex-shrink: 0;
+      }
+
+      /* ── Colors ── */
+      .colors { display: flex; gap: 5px; align-items: center; }
+      .swatch {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid transparent;
+        transition: transform 0.1s, border-color 0.12s;
+        flex-shrink: 0;
+      }
+      .swatch:hover { transform: scale(1.15); }
+      .swatch.active { border-color: rgba(255, 255, 255, 0.9); }
+
+      .spacer { flex: 1; height: 100%; -webkit-app-region: drag; }
+
+      /* ── Actions ── */
+      .actions { display: flex; gap: 6px; }
+      .action-btn {
+        height: 30px;
+        padding: 0 14px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.12s;
+        letter-spacing: 0.01em;
+      }
+      .action-btn:hover { background: rgba(255, 255, 255, 0.12); }
+      .action-btn.primary { background: #007aff; border-color: #007aff; color: #fff; }
+      .action-btn.primary:hover { background: #0062cc; }
+
+      /* ── Canvas ── */
+      .canvas-area {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        padding: 16px;
+      }
+      .canvas-wrap {
+        position: relative;
+        box-shadow: 0 2px 20px rgba(0, 0, 0, 0.6);
+        border-radius: 3px;
+        overflow: hidden;
+        line-height: 0;
+      }
+      #imageCanvas { display: block; }
+      #drawCanvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        cursor: crosshair;
+      }
+
+      /* ── Text input overlay ── */
+      .text-input {
+        position: absolute;
+        background: transparent;
+        border: 1px dashed rgba(255, 255, 255, 0.4);
+        outline: none;
+        font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+        font-weight: 600;
+        padding: 2px 4px;
+        min-width: 20px;
+        z-index: 10;
+      }
+
+      /* ── Text size picker ── */
+      .size-picker {
+        display: none;
+        gap: 2px;
+      }
+      .size-picker.visible { display: flex; }
+      .size-btn {
+        height: 34px;
+        padding: 0 8px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.6);
+        cursor: pointer;
+        font-weight: 600;
+        transition: background 0.12s, color 0.12s;
+      }
+      .size-btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .size-btn.active {
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="toolbar">
+        <div class="tool-group">
+          <button class="tool-btn active" data-tool="draw" title="Draw (D)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+          </button>
+          <button class="tool-btn" data-tool="arrow" title="Arrow (A)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="10 5 19 5 19 14"/></svg>
+          </button>
+          <button class="tool-btn" data-tool="rect" title="Rectangle (R)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          </button>
+          <button class="tool-btn" data-tool="text" title="Text (T)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9.5" y1="20" x2="14.5" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+          </button>
+          <button class="tool-btn" data-tool="redact" title="Redact (X)">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          </button>
+          <button class="tool-btn" data-tool="callout" title="Callout (C)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><text x="12" y="16" text-anchor="middle" fill="currentColor" stroke="none" font-size="12" font-weight="700">1</text></svg>
+          </button>
+        </div>
+
+        <div class="sep"></div>
+
+        <button class="tool-btn" id="undoBtn" title="Undo (Ctrl+Z)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+        </button>
+
+        <div class="sep"></div>
+
+        <div class="colors">
+          <div class="swatch active" data-color="#ff3b30" style="background:#ff3b30"></div>
+          <div class="swatch" data-color="#ff9500" style="background:#ff9500"></div>
+          <div class="swatch" data-color="#ffcc00" style="background:#ffcc00"></div>
+          <div class="swatch" data-color="#34c759" style="background:#34c759"></div>
+          <div class="swatch" data-color="#007aff" style="background:#007aff"></div>
+          <div class="swatch" data-color="#ffffff" style="background:#ffffff;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.2)"></div>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="size-picker" id="sizePicker">
+          <button class="size-btn" data-size="S" style="font-size:11px" title="Small text">S</button>
+          <button class="size-btn active" data-size="M" style="font-size:13px" title="Medium text">M</button>
+          <button class="size-btn" data-size="L" style="font-size:15px" title="Large text">L</button>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="actions">
+          <button class="action-btn" id="cancelBtn">Cancel</button>
+          <button class="action-btn primary" id="doneBtn">Done</button>
+        </div>
+      </div>
+
+      <div class="canvas-area" id="canvasArea">
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="imageCanvas"></canvas>
+          <canvas id="drawCanvas"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const imageCanvas = document.getElementById("imageCanvas");
+      const drawCanvas = document.getElementById("drawCanvas");
+      const imgCtx = imageCanvas.getContext("2d");
+      const drawCtx = drawCanvas.getContext("2d");
+      const canvasArea = document.getElementById("canvasArea");
+
+      const img = new Image();
+      const MAX_STROKES = 500;
+      let tool = "draw";
+      let color = "#ff3b30";
+      let strokeBaseWidth = 3;
+      let strokes = [];
+      let currentStroke = null;
+      let isDrawing = false;
+      let textSize = "M"; // S, M, L
+      let calloutCounter = 1;
+      const textSizeMap = { S: 14, M: 20, L: 30 }; // base font sizes in display pixels
+      const sizePicker = document.getElementById("sizePicker");
+
+      /* ── Tool selection ── */
+      document.querySelectorAll("[data-tool]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelector("[data-tool].active").classList.remove("active");
+          btn.classList.add("active");
+          tool = btn.dataset.tool;
+          sizePicker.classList.toggle("visible", tool === "text");
+        });
+      });
+
+      function selectTool(t) {
+        tool = t;
+        document.querySelector("[data-tool].active").classList.remove("active");
+        document.querySelector(`[data-tool="${t}"]`).classList.add("active");
+        sizePicker.classList.toggle("visible", t === "text");
+      }
+
+      /* ── Text size selection ── */
+      document.querySelectorAll("[data-size]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelector("[data-size].active").classList.remove("active");
+          btn.classList.add("active");
+          textSize = btn.dataset.size;
+        });
+      });
+
+      /* ── Color selection ── */
+      document.querySelectorAll(".swatch").forEach((sw) => {
+        sw.addEventListener("click", () => {
+          document.querySelector(".swatch.active").classList.remove("active");
+          sw.classList.add("active");
+          color = sw.dataset.color;
+        });
+      });
+
+      /* ── Undo ── */
+      function undo() {
+        if (strokes.length > 0) {
+          const removed = strokes.pop();
+          if (removed.type === "callout") calloutCounter--;
+          renderDrawCanvas();
+        }
+      }
+      document.getElementById("undoBtn").addEventListener("click", undo);
+
+      /* ── Cancel / Done ── */
+      document.getElementById("cancelBtn").addEventListener("click", () => window.annotate.cancel());
+      document.getElementById("doneBtn").addEventListener("click", save);
+
+      /* ── Keyboard shortcuts ── */
+      document.addEventListener("keydown", (e) => {
+        // Don't intercept keys when typing in text input
+        if (e.target.classList.contains("text-input")) return;
+        if (e.key === "Escape") { window.annotate.cancel(); return; }
+        if ((e.ctrlKey || e.metaKey) && e.key === "z") { e.preventDefault(); undo(); return; }
+        if (e.key === "d") selectTool("draw");
+        if (e.key === "a") selectTool("arrow");
+        if (e.key === "r") selectTool("rect");
+        if (e.key === "t") selectTool("text");
+        if (e.key === "x") selectTool("redact");
+        if (e.key === "c") selectTool("callout");
+      });
+
+      /* ── Canvas coordinates (display-pixel space) ── */
+      function canvasCoords(e) {
+        const rect = drawCanvas.getBoundingClientRect();
+        return {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        };
+      }
+
+      /* ── Text input helper ── */
+      function spawnTextInput(pt) {
+        const wrap = document.getElementById("canvasWrap");
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "text-input";
+        const fontSize = textSizeMap[textSize];
+        input.style.left = pt.x + "px";
+        input.style.top = (pt.y - fontSize / 2) + "px";
+        input.style.fontSize = fontSize + "px";
+        input.style.color = color;
+        input.dataset.ptX = pt.x;
+        input.dataset.ptY = pt.y;
+        input.dataset.size = textSize;
+        input.dataset.color = color;
+        wrap.appendChild(input);
+        input.focus();
+
+        function commit() {
+          const text = input.value.trim();
+          if (text) {
+            strokes.push({
+              type: "text",
+              text,
+              pos: { x: parseFloat(input.dataset.ptX), y: parseFloat(input.dataset.ptY) },
+              color: input.dataset.color,
+              size: input.dataset.size,
+            });
+            renderDrawCanvas();
+          }
+          input.remove();
+        }
+
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); commit(); }
+          if (e.key === "Escape") { e.preventDefault(); input.remove(); }
+          e.stopPropagation();
+        });
+        input.addEventListener("blur", commit);
+      }
+
+      /* ── Pointer events ── */
+      drawCanvas.addEventListener("pointerdown", (e) => {
+        const pt = canvasCoords(e);
+
+        if (tool === "text") {
+          spawnTextInput(pt);
+          return;
+        }
+
+        if (tool === "callout") {
+          strokes.push({
+            type: "callout",
+            pos: pt,
+            number: calloutCounter++,
+            color,
+          });
+          renderDrawCanvas();
+          return;
+        }
+
+        isDrawing = true;
+        drawCanvas.setPointerCapture(e.pointerId);
+
+        if (tool === "draw") {
+          currentStroke = { type: "draw", points: [pt], color, width: strokeBaseWidth };
+        } else if (tool === "arrow") {
+          currentStroke = { type: "arrow", from: pt, to: { ...pt }, color, width: strokeBaseWidth };
+        } else if (tool === "rect") {
+          currentStroke = { type: "rect", from: pt, to: { ...pt }, color, width: strokeBaseWidth };
+        } else if (tool === "redact") {
+          currentStroke = { type: "redact", from: pt, to: { ...pt } };
+        }
+      });
+
+      drawCanvas.addEventListener("pointermove", (e) => {
+        if (!isDrawing || !currentStroke) return;
+        const pt = canvasCoords(e);
+
+        if (currentStroke.type === "draw") {
+          // Incremental draw — fast for freehand
+          const prev = currentStroke.points[currentStroke.points.length - 1];
+          drawCtx.strokeStyle = currentStroke.color;
+          drawCtx.lineWidth = currentStroke.width;
+          drawCtx.lineCap = "round";
+          drawCtx.lineJoin = "round";
+          drawCtx.beginPath();
+          drawCtx.moveTo(prev.x, prev.y);
+          drawCtx.lineTo(pt.x, pt.y);
+          drawCtx.stroke();
+          currentStroke.points.push(pt);
+        } else {
+          // Shape tools: redraw all on each move
+          currentStroke.to = pt;
+          renderDrawCanvas();
+        }
+      });
+
+      drawCanvas.addEventListener("pointerup", () => {
+        if (currentStroke) {
+          // Only save strokes with meaningful content
+          let dominated;
+          if (currentStroke.type === "draw") {
+            dominated = currentStroke.points.length >= 2;
+          } else if (currentStroke.type === "redact" || currentStroke.type === "rect" || currentStroke.type === "arrow") {
+            dominated = Math.abs(currentStroke.to.x - currentStroke.from.x) > 2 ||
+              Math.abs(currentStroke.to.y - currentStroke.from.y) > 2;
+          }
+          if (dominated && strokes.length < MAX_STROKES) strokes.push(currentStroke);
+          currentStroke = null;
+        }
+        isDrawing = false;
+      });
+
+      /* ── Rendering ── */
+      function renderDrawCanvas() {
+        drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        const all = currentStroke ? [...strokes, currentStroke] : strokes;
+        for (const s of all) {
+          drawStrokeOnCtx(drawCtx, s, 1, 1);
+        }
+      }
+
+      function drawStrokeOnCtx(ctx, stroke, sx, sy) {
+        if (stroke.type === "text") {
+          const fontSize = textSizeMap[stroke.size] * sx;
+          ctx.font = `600 ${fontSize}px -apple-system, "Segoe UI", system-ui, sans-serif`;
+          ctx.fillStyle = stroke.color;
+          ctx.textBaseline = "middle";
+          ctx.fillText(stroke.text, stroke.pos.x * sx, stroke.pos.y * sy);
+          return;
+        }
+
+        if (stroke.type === "redact") {
+          const x = Math.min(stroke.from.x, stroke.to.x) * sx;
+          const y = Math.min(stroke.from.y, stroke.to.y) * sy;
+          const w = Math.abs(stroke.to.x - stroke.from.x) * sx;
+          const h = Math.abs(stroke.to.y - stroke.from.y) * sy;
+          ctx.fillStyle = "#000000";
+          ctx.fillRect(x, y, w, h);
+          return;
+        }
+
+        if (stroke.type === "callout") {
+          const radius = 14 * sx;
+          const cx = stroke.pos.x * sx;
+          const cy = stroke.pos.y * sy;
+          // Filled circle
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          ctx.fillStyle = stroke.color;
+          ctx.fill();
+          // Number
+          const numSize = Math.round(radius * 1.2);
+          ctx.font = `700 ${numSize}px -apple-system, "Segoe UI", system-ui, sans-serif`;
+          ctx.fillStyle = "#fff";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(String(stroke.number), cx, cy);
+          ctx.textAlign = "start"; // reset
+          return;
+        }
+
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.width * sx;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        if (stroke.type === "draw") {
+          if (stroke.points.length < 2) return;
+          ctx.beginPath();
+          ctx.moveTo(stroke.points[0].x * sx, stroke.points[0].y * sy);
+          for (let i = 1; i < stroke.points.length; i++) {
+            ctx.lineTo(stroke.points[i].x * sx, stroke.points[i].y * sy);
+          }
+          ctx.stroke();
+        } else if (stroke.type === "arrow") {
+          drawArrow(ctx,
+            stroke.from.x * sx, stroke.from.y * sy,
+            stroke.to.x * sx, stroke.to.y * sy,
+            stroke.width * sx
+          );
+        } else if (stroke.type === "rect") {
+          const x = Math.min(stroke.from.x, stroke.to.x) * sx;
+          const y = Math.min(stroke.from.y, stroke.to.y) * sy;
+          const w = Math.abs(stroke.to.x - stroke.from.x) * sx;
+          const h = Math.abs(stroke.to.y - stroke.from.y) * sy;
+          ctx.strokeRect(x, y, w, h);
+        }
+      }
+
+      function drawArrow(ctx, x1, y1, x2, y2, lineW) {
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const headLen = Math.max(10, lineW * 5);
+
+        // Shaft — stop at the base of the arrowhead so it doesn't poke through
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2 - headLen * Math.cos(angle), y2 - headLen * Math.sin(angle));
+        ctx.stroke();
+
+        // Head
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(
+          x2 - headLen * Math.cos(angle - Math.PI / 7),
+          y2 - headLen * Math.sin(angle - Math.PI / 7)
+        );
+        ctx.lineTo(
+          x2 - headLen * Math.cos(angle + Math.PI / 7),
+          y2 - headLen * Math.sin(angle + Math.PI / 7)
+        );
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      /* ── Save: composite at full image resolution ── */
+      function save() {
+        const out = document.createElement("canvas");
+        out.width = img.naturalWidth;
+        out.height = img.naturalHeight;
+        const outCtx = out.getContext("2d");
+        outCtx.drawImage(img, 0, 0);
+
+        const sx = img.naturalWidth / drawCanvas.width;
+        const sy = img.naturalHeight / drawCanvas.height;
+
+        for (const s of strokes) {
+          drawStrokeOnCtx(outCtx, s, sx, sy);
+        }
+
+        out.toBlob((blob) => {
+          blob.arrayBuffer().then((buf) => {
+            window.annotate.save(new Uint8Array(buf));
+          });
+        }, "image/png");
+      }
+
+      /* ── Init canvas to fit available space ── */
+      function initCanvas() {
+        const area = canvasArea.getBoundingClientRect();
+        const pad = 32;
+        const maxW = area.width - pad;
+        const maxH = area.height - pad;
+
+        const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
+        const w = Math.round(img.naturalWidth * scale);
+        const h = Math.round(img.naturalHeight * scale);
+
+        imageCanvas.width = w;
+        imageCanvas.height = h;
+        drawCanvas.width = w;
+        drawCanvas.height = h;
+
+        imgCtx.drawImage(img, 0, 0, w, h);
+
+        strokeBaseWidth = Math.max(2, Math.round(w / 250));
+      }
+
+      /* ── Receive image from main process ── */
+      window.annotate.onLoad((data) => {
+        if (typeof data.imageDataUrl !== "string" || !data.imageDataUrl.startsWith("data:image/")) return;
+        img.onerror = () => console.error("Failed to load annotation image");
+        img.onload = () => initCanvas();
+        img.src = data.imageDataUrl;
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900">
+  <style>
+    text { font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif; }
+  </style>
+
+  <!-- Background -->
+  <rect width="1200" height="900" fill="#fafafa"/>
+
+  <!-- ==================== CONCEPT A ==================== -->
+  <!-- Rounded square frame with lightning bolt cutout — screen + speed -->
+  <text x="200" y="60" font-size="14" fill="#999" font-weight="500" letter-spacing="2">CONCEPT A — CAPTURE BOLT</text>
+
+  <g transform="translate(120, 80)">
+    <!-- Main mark -->
+    <rect x="0" y="0" width="160" height="160" rx="36" fill="#1a1a1a"/>
+    <!-- Inner screen frame -->
+    <rect x="24" y="24" width="112" height="112" rx="16" fill="#fafafa"/>
+    <!-- Lightning bolt in center -->
+    <polygon points="88,36 62,84 78,84 72,124 98,76 82,76" fill="#E86B47"/>
+
+    <!-- Wordmark -->
+    <text x="190" y="70" font-size="48" font-weight="700" fill="#1a1a1a" letter-spacing="-1">Quick Gen</text>
+    <text x="190" y="100" font-size="18" font-weight="400" fill="#999" letter-spacing="3">qgn.app</text>
+
+    <!-- Small standalone mark -->
+    <g transform="translate(440, 20)">
+      <rect x="0" y="0" width="56" height="56" rx="13" fill="#1a1a1a"/>
+      <rect x="8" y="8" width="40" height="40" rx="6" fill="#fafafa"/>
+      <polygon points="31,12 22,30 28,30 25.5,44 35,26 29,26" fill="#E86B47"/>
+    </g>
+    <text x="440" y="100" font-size="11" fill="#bbb" font-weight="500">FAVICON</text>
+  </g>
+
+  <!-- ==================== CONCEPT B ==================== -->
+  <!-- Viewfinder crop marks with spark — minimal & clean -->
+  <text x="200" y="310" font-size="14" fill="#999" font-weight="500" letter-spacing="2">CONCEPT B — VIEWFINDER SPARK</text>
+
+  <g transform="translate(120, 330)">
+    <!-- Crop mark corners -->
+    <g stroke="#1a1a1a" stroke-width="10" stroke-linecap="round" fill="none">
+      <!-- Top-left -->
+      <path d="M8,48 L8,8 L48,8"/>
+      <!-- Top-right -->
+      <path d="M112,8 L152,8 L152,48"/>
+      <!-- Bottom-left -->
+      <path d="M8,112 L8,152 L48,152"/>
+      <!-- Bottom-right -->
+      <path d="M112,152 L152,152 L152,112"/>
+    </g>
+    <!-- Center spark/burst -->
+    <g transform="translate(80, 80)">
+      <circle cx="0" cy="0" r="8" fill="#D4654A"/>
+      <line x1="0" y1="-22" x2="0" y2="-14" stroke="#D4654A" stroke-width="5" stroke-linecap="round"/>
+      <line x1="0" y1="14" x2="0" y2="22" stroke="#D4654A" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-22" y1="0" x2="-14" y2="0" stroke="#D4654A" stroke-width="5" stroke-linecap="round"/>
+      <line x1="14" y1="0" x2="22" y2="0" stroke="#D4654A" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-16" y1="-16" x2="-10" y2="-10" stroke="#D4654A" stroke-width="4" stroke-linecap="round"/>
+      <line x1="10" y1="-10" x2="16" y2="-16" stroke="#D4654A" stroke-width="4" stroke-linecap="round"/>
+      <line x1="-16" y1="16" x2="-10" y2="10" stroke="#D4654A" stroke-width="4" stroke-linecap="round"/>
+      <line x1="10" y1="10" x2="16" y2="16" stroke="#D4654A" stroke-width="4" stroke-linecap="round"/>
+    </g>
+
+    <!-- Wordmark -->
+    <text x="190" y="70" font-size="48" font-weight="700" fill="#1a1a1a" letter-spacing="-1">Quick Gen</text>
+    <text x="190" y="100" font-size="18" font-weight="400" fill="#999" letter-spacing="3">qgn.app</text>
+
+    <!-- Small standalone mark -->
+    <g transform="translate(450, 25)">
+      <g stroke="#1a1a1a" stroke-width="4" stroke-linecap="round" fill="none">
+        <path d="M3,17 L3,3 L17,3"/>
+        <path d="M39,3 L53,3 L53,17"/>
+        <path d="M3,39 L3,53 L17,53"/>
+        <path d="M39,53 L53,53 L53,39"/>
+      </g>
+      <circle cx="28" cy="28" r="4" fill="#D4654A"/>
+      <line x1="28" y1="18" x2="28" y2="22" stroke="#D4654A" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="28" y1="34" x2="28" y2="38" stroke="#D4654A" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="18" y1="28" x2="22" y2="28" stroke="#D4654A" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="34" y1="28" x2="38" y2="28" stroke="#D4654A" stroke-width="2.5" stroke-linecap="round"/>
+    </g>
+    <text x="450" y="100" font-size="11" fill="#bbb" font-weight="500">FAVICON</text>
+  </g>
+
+  <!-- ==================== CONCEPT C ==================== -->
+  <!-- Abstract Q as a screen with play/capture indicator -->
+  <text x="200" y="560" font-size="14" fill="#999" font-weight="500" letter-spacing="2">CONCEPT C — Q FRAME</text>
+
+  <g transform="translate(120, 580)">
+    <!-- Rounded Q shape made from a screen frame -->
+    <rect x="10" y="0" width="140" height="130" rx="30" fill="#1a1a1a"/>
+    <!-- Inner cutout -->
+    <rect x="30" y="20" width="100" height="90" rx="14" fill="#fafafa"/>
+    <!-- Q tail — angled bar -->
+    <rect x="105" y="100" width="50" height="16" rx="8" fill="#1a1a1a" transform="rotate(-40, 130, 108)"/>
+    <!-- Capture dot -->
+    <circle cx="80" cy="65" r="16" fill="none" stroke="#CF5C3E" stroke-width="6"/>
+    <circle cx="80" cy="65" r="5" fill="#CF5C3E"/>
+
+    <!-- Wordmark -->
+    <text x="195" y="70" font-size="48" font-weight="700" fill="#1a1a1a" letter-spacing="-1">Quick Gen</text>
+    <text x="195" y="100" font-size="18" font-weight="400" fill="#999" letter-spacing="3">qgn.app</text>
+
+    <!-- Small standalone mark -->
+    <g transform="translate(453, 15)">
+      <rect x="4" y="0" width="48" height="45" rx="11" fill="#1a1a1a"/>
+      <rect x="11" y="7" width="34" height="31" rx="5" fill="#fafafa"/>
+      <rect x="37" y="34" width="18" height="6" rx="3" fill="#1a1a1a" transform="rotate(-40, 46, 37)"/>
+      <circle cx="28" cy="22.5" r="6" fill="none" stroke="#CF5C3E" stroke-width="2.5"/>
+      <circle cx="28" cy="22.5" r="2" fill="#CF5C3E"/>
+    </g>
+    <text x="453" y="100" font-size="11" fill="#bbb" font-weight="500">FAVICON</text>
+  </g>
+
+  <!-- Color palette reference -->
+  <g transform="translate(900, 820)">
+    <text x="0" y="0" font-size="11" fill="#bbb" font-weight="500" letter-spacing="1">PALETTE</text>
+    <rect x="0" y="10" width="24" height="24" rx="4" fill="#1a1a1a"/>
+    <rect x="32" y="10" width="24" height="24" rx="4" fill="#E86B47"/>
+    <rect x="64" y="10" width="24" height="24" rx="4" fill="#D4654A"/>
+    <rect x="96" y="10" width="24" height="24" rx="4" fill="#CF5C3E"/>
+    <rect x="128" y="10" width="24" height="24" rx="4" fill="#fafafa" stroke="#ddd"/>
+  </g>
+</svg>

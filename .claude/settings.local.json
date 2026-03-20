@@ -36,7 +36,10 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:crates.io)",
       "WebFetch(domain:lib.rs)",
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(node -c c:/Users/morte/Documents/GitHub/qgn.app/main.js)",
+      "Bash(grep -E '\\\\.\\(js|html|json\\)$')",
+      "Bash(node -c main.js)"
     ]
   }
 }

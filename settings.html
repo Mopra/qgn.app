@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'">
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+        user-select: none;
+      }
+
+      .panel {
+        background: rgba(30, 30, 30, 0.95);
+        backdrop-filter: blur(40px) saturate(1.8);
+        -webkit-backdrop-filter: blur(40px) saturate(1.8);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+        padding: 8px;
+        font-family: -apple-system, "SF Pro Text", "Segoe UI", system-ui,
+          sans-serif;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4),
+          0 2px 8px rgba(0, 0, 0, 0.2);
+        -webkit-app-region: drag;
+      }
+
+      .section-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.4);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 6px 10px 4px;
+      }
+
+      .item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.85);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: background 0.15s ease;
+        -webkit-app-region: no-drag;
+      }
+
+      .item:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .item.selected {
+        color: #fff;
+      }
+
+      .check {
+        width: 14px;
+        flex-shrink: 0;
+        text-align: center;
+        font-size: 12px;
+      }
+
+      .item-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+      }
+
+      .separator {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.1);
+        margin: 4px 8px;
+      }
+
+      .folder-path {
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.35);
+        padding: 2px 10px 2px 32px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .toggle {
+        position: relative;
+        width: 32px;
+        height: 18px;
+        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.15);
+        cursor: pointer;
+        transition: background 0.2s ease;
+        flex-shrink: 0;
+      }
+
+      .toggle.on {
+        background: rgba(52, 199, 89, 0.8);
+      }
+
+      .toggle-knob {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #fff;
+        transition: transform 0.2s ease;
+      }
+
+      .toggle.on .toggle-knob {
+        transform: translateX(14px);
+      }
+
+      .hotkey-btn {
+        padding: 3px 8px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.7);
+        font-family: inherit;
+        font-size: 11px;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
+        outline: none;
+        flex-shrink: 0;
+        -webkit-app-region: no-drag;
+      }
+
+      .hotkey-btn:hover {
+        border-color: rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .hotkey-btn.recording {
+        border-color: rgba(59, 130, 246, 0.7);
+        background: rgba(59, 130, 246, 0.15);
+        color: rgba(59, 130, 246, 0.9);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="panel" id="panel"></div>
+    <script>
+      const panel = document.getElementById("panel");
+      const formats = ["png", "jpg", "webp", "base64"];
+
+      const hotkeyActions = [
+        { key: "capture", label: "Capture" },
+        { key: "record", label: "Record" },
+      ];
+
+      let currentSettings = null;
+      let recordingAction = null;
+      let recordingBtn = null;
+
+      function keyToAccelerator(e) {
+        const parts = [];
+        if (e.ctrlKey || e.metaKey) parts.push("CommandOrControl");
+        if (e.altKey) parts.push("Alt");
+        if (e.shiftKey) parts.push("Shift");
+
+        const key = e.key;
+        if (["Control", "Shift", "Alt", "Meta"].includes(key)) return null;
+
+        const keyMap = {
+          " ": "Space",
+          ArrowUp: "Up",
+          ArrowDown: "Down",
+          ArrowLeft: "Left",
+          ArrowRight: "Right",
+          Delete: "Delete",
+          Backspace: "Backspace",
+          Enter: "Return",
+          Escape: "Escape",
+          Tab: "Tab",
+        };
+
+        parts.push(keyMap[key] || key.toUpperCase());
+        return parts.join("+");
+      }
+
+      function displayAccelerator(acc) {
+        return acc
+          .replace("CommandOrControl", "Ctrl")
+          .replace("CmdOrCtrl", "Ctrl")
+          .replace(/\+/g, " + ");
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (!recordingAction) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const acc = keyToAccelerator(e);
+        if (!acc) return;
+
+        if (e.key === "Escape") {
+          recordingBtn.classList.remove("recording");
+          recordingBtn.textContent = displayAccelerator(
+            currentSettings.hotkeys[recordingAction]
+          );
+          recordingAction = null;
+          recordingBtn = null;
+          return;
+        }
+
+        currentSettings.hotkeys[recordingAction] = acc;
+        window.qgnSettings.setHotkey(recordingAction, acc);
+        recordingBtn.classList.remove("recording");
+        recordingBtn.textContent = displayAccelerator(acc);
+        recordingAction = null;
+        recordingBtn = null;
+      });
+
+      function render(settings) {
+        currentSettings = settings;
+        // Cancel any in-progress recording on re-render
+        recordingAction = null;
+        recordingBtn = null;
+
+        panel.innerHTML = "";
+
+        // Copy format section
+        const fmtLabel = document.createElement("div");
+        fmtLabel.className = "section-label";
+        fmtLabel.textContent = "Copy format";
+        panel.appendChild(fmtLabel);
+
+        formats.forEach((fmt) => {
+          const item = document.createElement("div");
+          item.className =
+            "item" + (settings.copyFormat === fmt ? " selected" : "");
+
+          const check = document.createElement("span");
+          check.className = "check";
+          check.textContent = settings.copyFormat === fmt ? "\u2713" : "";
+
+          const label = document.createElement("span");
+          label.className = "item-label";
+          label.textContent =
+            fmt === "base64" ? "Base64 Data URI" : fmt.toUpperCase();
+
+          item.appendChild(check);
+          item.appendChild(label);
+          item.addEventListener("click", () => {
+            settings.copyFormat = fmt;
+            window.qgnSettings.setCopyFormat(fmt);
+            render(settings);
+          });
+          panel.appendChild(item);
+        });
+
+        // Separator
+        const sep = document.createElement("div");
+        sep.className = "separator";
+        panel.appendChild(sep);
+
+        // Save to disk toggle
+        const saveRow = document.createElement("div");
+        saveRow.className = "item";
+
+        const saveLabel = document.createElement("span");
+        saveLabel.className = "item-label";
+        saveLabel.textContent = "Save to disk";
+
+        const toggle = document.createElement("div");
+        toggle.className = "toggle" + (settings.saveToDisk ? " on" : "");
+        const knob = document.createElement("div");
+        knob.className = "toggle-knob";
+        toggle.appendChild(knob);
+
+        saveRow.appendChild(saveLabel);
+        saveRow.appendChild(toggle);
+        saveRow.addEventListener("click", () => {
+          settings.saveToDisk = !settings.saveToDisk;
+          window.qgnSettings.setSaveToDisk(settings.saveToDisk);
+          render(settings);
+        });
+        panel.appendChild(saveRow);
+
+        // Save folder (visible when save to disk is on)
+        if (settings.saveToDisk) {
+          const folderPath = document.createElement("div");
+          folderPath.className = "folder-path";
+          folderPath.textContent = settings.saveFolder;
+          folderPath.title = settings.saveFolder;
+          panel.appendChild(folderPath);
+
+          const changeFolder = document.createElement("div");
+          changeFolder.className = "item";
+          const changeLabel = document.createElement("span");
+          changeLabel.className = "item-label";
+          changeLabel.textContent = "Change save folder\u2026";
+          changeFolder.appendChild(changeLabel);
+          changeFolder.addEventListener("click", () => {
+            window.qgnSettings.chooseSaveFolder();
+          });
+          panel.appendChild(changeFolder);
+        }
+
+        // Hotkeys section
+        const sep2 = document.createElement("div");
+        sep2.className = "separator";
+        panel.appendChild(sep2);
+
+        const hkLabel = document.createElement("div");
+        hkLabel.className = "section-label";
+        hkLabel.textContent = "Hotkeys";
+        panel.appendChild(hkLabel);
+
+        hotkeyActions.forEach(({ key, label }) => {
+          const row = document.createElement("div");
+          row.className = "item";
+
+          const rowLabel = document.createElement("span");
+          rowLabel.className = "item-label";
+          rowLabel.textContent = label;
+
+          const btn = document.createElement("button");
+          btn.className = "hotkey-btn";
+          btn.textContent = displayAccelerator(settings.hotkeys[key]);
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (recordingBtn) {
+              recordingBtn.classList.remove("recording");
+              recordingBtn.textContent = displayAccelerator(
+                currentSettings.hotkeys[recordingAction]
+              );
+            }
+            recordingAction = key;
+            recordingBtn = btn;
+            btn.classList.add("recording");
+            btn.textContent = "Press keys\u2026";
+          });
+
+          row.appendChild(rowLabel);
+          row.appendChild(btn);
+          panel.appendChild(row);
+        });
+      }
+
+      window.qgnSettings.getSettings().then(render);
+      window.qgnSettings.onUpdated((data) => render(data));
+    </script>
+  </body>
+</html>

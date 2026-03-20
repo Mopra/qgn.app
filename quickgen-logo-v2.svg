@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1000">
+  <style>
+    text { font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif; }
+  </style>
+
+  <rect width="1200" height="1000" fill="#fafafa"/>
+
+  <!-- ==================== VARIATION 1 ==================== -->
+  <!-- Q with a distinct diagonal tail extending from bottom-right + sunburst center -->
+  <text x="200" y="55" font-size="14" fill="#999" font-weight="500" letter-spacing="2">VARIATION 1 — BOLD TAIL</text>
+
+  <g transform="translate(130, 75)">
+    <!-- Outer Q body -->
+    <rect x="0" y="0" width="150" height="140" rx="32" fill="#1a1a1a"/>
+    <!-- Inner cutout -->
+    <rect x="22" y="22" width="106" height="96" rx="16" fill="#fafafa"/>
+    <!-- Q tail — thick diagonal stroke clearly extending outside -->
+    <line x1="112" y1="112" x2="158" y2="158" stroke="#1a1a1a" stroke-width="22" stroke-linecap="round"/>
+
+    <!-- Sunburst in center -->
+    <g transform="translate(75, 70)">
+      <circle cx="0" cy="0" r="10" fill="#E86B47"/>
+      <line x1="0" y1="-26" x2="0" y2="-16" stroke="#E86B47" stroke-width="5.5" stroke-linecap="round"/>
+      <line x1="0" y1="16" x2="0" y2="26" stroke="#E86B47" stroke-width="5.5" stroke-linecap="round"/>
+      <line x1="-26" y1="0" x2="-16" y2="0" stroke="#E86B47" stroke-width="5.5" stroke-linecap="round"/>
+      <line x1="16" y1="0" x2="26" y2="0" stroke="#E86B47" stroke-width="5.5" stroke-linecap="round"/>
+      <line x1="-18" y1="-18" x2="-11" y2="-11" stroke="#E86B47" stroke-width="4" stroke-linecap="round"/>
+      <line x1="11" y1="-11" x2="18" y2="-18" stroke="#E86B47" stroke-width="4" stroke-linecap="round"/>
+      <line x1="-18" y1="18" x2="-11" y2="11" stroke="#E86B47" stroke-width="4" stroke-linecap="round"/>
+      <line x1="11" y1="11" x2="18" y2="18" stroke="#E86B47" stroke-width="4" stroke-linecap="round"/>
+    </g>
+
+    <!-- Wordmark -->
+    <text x="200" y="75" font-size="48" font-weight="700" fill="#1a1a1a" letter-spacing="-1">Quick Gen</text>
+    <text x="200" y="108" font-size="18" font-weight="400" fill="#999" letter-spacing="3">qgn.app</text>
+
+    <!-- Favicon -->
+    <g transform="translate(480, 20)">
+      <rect x="0" y="0" width="52" height="48" rx="11" fill="#1a1a1a"/>
+      <rect x="8" y="8" width="36" height="32" rx="6" fill="#fafafa"/>
+      <line x1="38" y1="38" x2="54" y2="54" stroke="#1a1a1a" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="26" cy="24" r="4" fill="#E86B47"/>
+      <line x1="26" y1="14" x2="26" y2="18" stroke="#E86B47" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="26" y1="30" x2="26" y2="34" stroke="#E86B47" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="16" y1="24" x2="20" y2="24" stroke="#E86B47" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="32" y1="24" x2="36" y2="24" stroke="#E86B47" stroke-width="2.5" stroke-linecap="round"/>
+    </g>
+    <text x="480" y="100" font-size="11" fill="#bbb" font-weight="500">FAVICON</text>
+  </g>
+
+
+  <!-- ==================== VARIATION 2 ==================== -->
+  <!-- Q with open bottom-right corner forming the tail gap + sunburst -->
+  <text x="200" y="305" font-size="14" fill="#999" font-weight="500" letter-spacing="2">VARIATION 2 — OPEN CORNER Q</text>
+
+  <g transform="translate(130, 325)">
+    <!-- Q body as a rounded square with a gap at bottom-right -->
+    <path d="M32,0 L118,0 C135,0 150,15 150,32 L150,80 C150,82 149,84 148,86 L148,86 C144,78 134,72 122,72 L110,72 L110,108 C110,125 95,140 78,140 L32,140 C15,140 0,125 0,108 L0,32 C0,15 15,0 32,0 Z" fill="#1a1a1a"/>
+    <!-- Inner cutout -->
+    <path d="M36,22 L114,22 C121,22 128,28 128,36 L128,72 L88,72 L88,96 C88,103 82,108 76,108 L36,108 C29,108 22,102 22,96 L22,36 C22,28 29,22 36,22 Z" fill="#fafafa"/>
+    <!-- Q tail — separate diagonal piece at bottom-right -->
+    <rect x="118" y="100" width="46" height="20" rx="10" fill="#1a1a1a" transform="rotate(-45, 141, 110)"/>
+
+    <!-- Sunburst in center -->
+    <g transform="translate(68, 62)">
+      <circle cx="0" cy="0" r="10" fill="#E86B47"/>
+      <line x1="0" y1="-26" x2="0" y2="-16" stroke="#E86B47" stroke-width="5.5" stroke-linecap="round"/>
+      <line x1="0" y1="16" x2="0" y2="26" stroke="#E86B47" stroke-width="5.5" stroke-linecap="round"/>
+      <line x1="-26" y1="0" x2="-16" y2="0" stroke="#E86B47" stroke-width="5.5" stroke-linecap="round"/>
+      <line x1="16" y1="0" x2="26" y2="0" stroke="#E86B47" stroke-width="5.5" stroke-linecap="round"/>
+      <line x1="-18" y1="-18" x2="-11" y2="-11" stroke="#E86B47" stroke-width="4" stroke-linecap="round"/>
+      <line x1="11" y1="-11" x2="18" y2="-18" stroke="#E86B47" stroke-width="4" stroke-linecap="round"/>
+      <line x1="-18" y1="18" x2="-11" y2="11" stroke="#E86B47" stroke-width="4" stroke-linecap="round"/>
+      <line x1="11" y1="11" x2="18" y2="18" stroke="#E86B47" stroke-width="4" stroke-linecap="round"/>
+    </g>
+
+    <!-- Wordmark -->
+    <text x="200" y="75" font-size="48" font-weight="700" fill="#1a1a1a" letter-spacing="-1">Quick Gen</text>
+    <text x="200" y="108" font-size="18" font-weight="400" fill="#999" letter-spacing="3">qgn.app</text>
+
+    <!-- Favicon -->
+    <g transform="translate(480, 15)">
+      <path d="M11,0 L41,0 C49,0 52,5 52,11 L52,28 C52,29 51.5,30 51,31 L51,31 C49,28 46,25 42,25 L38,25 L38,37 C38,43 33,48 27,48 L11,48 C5,48 0,43 0,37 L0,11 C0,5 5,0 11,0 Z" fill="#1a1a1a"/>
+      <path d="M13,8 L39,8 C42,8 44,10 44,13 L44,25 L30,25 L30,33 C30,36 28,37 26,37 L13,37 C10,37 8,35 8,33 L8,13 C8,10 10,8 13,8 Z" fill="#fafafa"/>
+      <rect x="41" y="35" width="16" height="7" rx="3.5" fill="#1a1a1a" transform="rotate(-45, 49, 38)"/>
+      <circle cx="24" cy="22" r="4" fill="#E86B47"/>
+      <line x1="24" y1="14" x2="24" y2="17" stroke="#E86B47" stroke-width="2" stroke-linecap="round"/>
+      <line x1="24" y1="27" x2="24" y2="30" stroke="#E86B47" stroke-width="2" stroke-linecap="round"/>
+      <line x1="16" y1="22" x2="19" y2="22" stroke="#E86B47" stroke-width="2" stroke-linecap="round"/>
+      <line x1="29" y1="22" x2="32" y2="22" stroke="#E86B47" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <text x="480" y="100" font-size="11" fill="#bbb" font-weight="500">FAVICON</text>
+  </g>
+
+
+  <!-- ==================== VARIATION 3 ==================== -->
+  <!-- Clean rounded square with cutout Q counter + long sweeping tail -->
+  <text x="200" y="555" font-size="14" fill="#999" font-weight="500" letter-spacing="2">VARIATION 3 — SWEEP TAIL</text>
+
+  <g transform="translate(130, 575)">
+    <!-- Outer rounded square -->
+    <rect x="0" y="0" width="150" height="140" rx="32" fill="#1a1a1a"/>
+    <!-- Inner cutout -->
+    <rect x="22" y="22" width="106" height="96" rx="16" fill="#fafafa"/>
+    <!-- Sweeping Q tail — a long rounded bar going diagonally down-right -->
+    <path d="M100,105 Q130,135 165,155" stroke="#1a1a1a" stroke-width="20" stroke-linecap="round" fill="none"/>
+
+    <!-- Sunburst in center -->
+    <g transform="translate(75, 70)">
+      <circle cx="0" cy="0" r="10" fill="#E86B47"/>
+      <line x1="0" y1="-26" x2="0" y2="-16" stroke="#E86B47" stroke-width="5.5" stroke-linecap="round"/>
+      <line x1="0" y1="16" x2="0" y2="26" stroke="#E86B47" stroke-width="5.5" stroke-linecap="round"/>
+      <line x1="-26" y1="0" x2="-16" y2="0" stroke="#E86B47" stroke-width="5.5" stroke-linecap="round"/>
+      <line x1="16" y1="0" x2="26" y2="0" stroke="#E86B47" stroke-width="5.5" stroke-linecap="round"/>
+      <line x1="-18" y1="-18" x2="-11" y2="-11" stroke="#E86B47" stroke-width="4" stroke-linecap="round"/>
+      <line x1="11" y1="-11" x2="18" y2="-18" stroke="#E86B47" stroke-width="4" stroke-linecap="round"/>
+      <line x1="-18" y1="18" x2="-11" y2="11" stroke="#E86B47" stroke-width="4" stroke-linecap="round"/>
+      <line x1="11" y1="11" x2="18" y2="18" stroke="#E86B47" stroke-width="4" stroke-linecap="round"/>
+    </g>
+
+    <!-- Wordmark -->
+    <text x="205" y="75" font-size="48" font-weight="700" fill="#1a1a1a" letter-spacing="-1">Quick Gen</text>
+    <text x="205" y="108" font-size="18" font-weight="400" fill="#999" letter-spacing="3">qgn.app</text>
+
+    <!-- Favicon -->
+    <g transform="translate(483, 20)">
+      <rect x="0" y="0" width="50" height="46" rx="11" fill="#1a1a1a"/>
+      <rect x="8" y="8" width="34" height="30" rx="6" fill="#fafafa"/>
+      <path d="M34,35 Q43,44 54,50" stroke="#1a1a1a" stroke-width="7" stroke-linecap="round" fill="none"/>
+      <circle cx="25" cy="23" r="4" fill="#E86B47"/>
+      <line x1="25" y1="14" x2="25" y2="18" stroke="#E86B47" stroke-width="2" stroke-linecap="round"/>
+      <line x1="25" y1="28" x2="25" y2="32" stroke="#E86B47" stroke-width="2" stroke-linecap="round"/>
+      <line x1="16" y1="23" x2="20" y2="23" stroke="#E86B47" stroke-width="2" stroke-linecap="round"/>
+      <line x1="30" y1="23" x2="34" y2="23" stroke="#E86B47" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <text x="483" y="100" font-size="11" fill="#bbb" font-weight="500">FAVICON</text>
+  </g>
+
+
+  <!-- ==================== DARK MODE PREVIEW ==================== -->
+  <text x="200" y="800" font-size="14" fill="#999" font-weight="500" letter-spacing="2">DARK MODE PREVIEW (VAR 1)</text>
+
+  <g transform="translate(130, 815)">
+    <rect x="-20" y="-15" width="600" height="100" rx="12" fill="#1a1a1a"/>
+
+    <!-- White version of Var 1 -->
+    <rect x="0" y="0" width="62" height="58" rx="13" fill="#ffffff"/>
+    <rect x="9" y="9" width="44" height="40" rx="7" fill="#1a1a1a"/>
+    <line x1="47" y1="46" x2="65" y2="64" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+    <g transform="translate(31, 29)">
+      <circle cx="0" cy="0" r="5" fill="#E86B47"/>
+      <line x1="0" y1="-12" x2="0" y2="-8" stroke="#E86B47" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="0" y1="8" x2="0" y2="12" stroke="#E86B47" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="-12" y1="0" x2="-8" y2="0" stroke="#E86B47" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="8" y1="0" x2="12" y2="0" stroke="#E86B47" stroke-width="2.5" stroke-linecap="round"/>
+    </g>
+    <text x="85" y="32" font-size="32" font-weight="700" fill="#ffffff" letter-spacing="-0.5">Quick Gen</text>
+    <text x="85" y="52" font-size="13" font-weight="400" fill="#666" letter-spacing="2.5">qgn.app</text>
+  </g>
+
+</svg>

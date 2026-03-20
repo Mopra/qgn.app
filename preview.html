@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:">
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+        -webkit-app-region: no-drag;
+      }
+      .shadow-space {
+        height: 100%;
+        padding: 40px;
+        pointer-events: none;
+      }
+      .shadow-space * {
+        pointer-events: auto;
+      }
+      .card-wrapper {
+        height: 100%;
+        border-radius: clamp(10px, 4vw, 16px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4),
+                    0 2px 8px rgba(0, 0, 0, 0.25);
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+        transition: opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                    transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+      .card-wrapper.visible {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      .card-wrapper.draggable {
+        -webkit-app-region: drag;
+      }
+      .card-wrapper.draggable .pin-btn,
+      .card-wrapper.draggable .edit-btn,
+      .card-wrapper.draggable .close-btn,
+      .card-wrapper.draggable .thumb {
+        -webkit-app-region: no-drag;
+      }
+      .card-wrapper.dismissing {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+        transition: opacity 0.25s ease-in, transform 0.25s ease-in;
+      }
+      .card {
+        position: relative;
+        height: 100%;
+        border-radius: clamp(10px, 4vw, 16px);
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+      .thumb {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        background: rgba(0, 0, 0, 0.3);
+      }
+      .progress {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        border-radius: 0 0 clamp(10px, 4vw, 16px) clamp(10px, 4vw, 16px);
+        height: 5px;
+      }
+      .progress-fill {
+        height: 100%;
+        background: rgba(255, 255, 255, 0.6);
+        transform-origin: left;
+        animation: shrink 10s linear 0.35s forwards;
+      }
+      .card-wrapper:hover .progress-fill,
+      .card-wrapper.dismissing .progress-fill {
+        animation-play-state: paused;
+      }
+      .pin-btn {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.9);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s;
+      }
+      .pin-btn:hover {
+        background: rgba(0, 0, 0, 0.85);
+      }
+      .pin-btn.pinned {
+        background: rgba(255, 255, 255, 0.25);
+      }
+      .edit-btn {
+        position: absolute;
+        top: 6px;
+        left: 40px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.9);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s;
+      }
+      .edit-btn:hover {
+        background: rgba(0, 0, 0, 0.85);
+      }
+      .pin-btn img, .close-btn img {
+        width: 14px;
+        height: 14px;
+        filter: brightness(0) invert(1);
+        opacity: 0.85;
+      }
+      .close-btn {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s;
+      }
+      .close-btn:hover {
+        background: rgba(0, 0, 0, 0.85);
+      }
+      .resize-handle {
+        position: absolute;
+        display: none;
+        -webkit-app-region: no-drag;
+      }
+      .card-wrapper.draggable .resize-handle { display: block; }
+      .resize-handle.top    { top: 0; left: 8px; right: 8px; height: 8px; cursor: n-resize; }
+      .resize-handle.bottom { bottom: 0; left: 8px; right: 8px; height: 8px; cursor: s-resize; }
+      .resize-handle.left   { left: 0; top: 8px; bottom: 8px; width: 8px; cursor: w-resize; }
+      .resize-handle.right  { right: 0; top: 8px; bottom: 8px; width: 8px; cursor: e-resize; }
+      .resize-handle.top-left     { top: 0; left: 0; width: 12px; height: 12px; cursor: nw-resize; }
+      .resize-handle.top-right    { top: 0; right: 0; width: 12px; height: 12px; cursor: ne-resize; }
+      .resize-handle.bottom-left  { bottom: 0; left: 0; width: 12px; height: 12px; cursor: sw-resize; }
+      .resize-handle.bottom-right { bottom: 0; right: 0; width: 12px; height: 12px; cursor: se-resize; }
+      .video-badge {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: none;
+        cursor: pointer;
+        opacity: 0.9;
+        filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+        transition: opacity 0.15s;
+      }
+      .video-badge:hover {
+        opacity: 1;
+      }
+      @keyframes shrink {
+        from { transform: scaleX(1); }
+        to { transform: scaleX(0); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shadow-space">
+      <div class="card-wrapper" id="cardWrapper">
+        <div class="card" id="card">
+          <img class="thumb" id="thumb" />
+          <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+          <button class="pin-btn" id="pinBtn" title="Pin"><img src="assets/icons/thumbtack-solid-full.svg" /></button>
+          <button class="edit-btn" id="editBtn" title="Annotate">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+          </button>
+          <div class="video-badge" id="videoBadge">
+            <svg width="36" height="36" viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="18" fill="rgba(0,0,0,0.55)"/>
+              <polygon points="15,11 15,25 27,18" fill="white"/>
+            </svg>
+          </div>
+          <button class="close-btn" id="closeBtn"><img src="assets/icons/xmark-solid-full.svg" /></button>
+          <div class="resize-handle top" data-dir="n"></div>
+          <div class="resize-handle bottom" data-dir="s"></div>
+          <div class="resize-handle left" data-dir="w"></div>
+          <div class="resize-handle right" data-dir="e"></div>
+          <div class="resize-handle top-left" data-dir="nw"></div>
+          <div class="resize-handle top-right" data-dir="ne"></div>
+          <div class="resize-handle bottom-left" data-dir="sw"></div>
+          <div class="resize-handle bottom-right" data-dir="se"></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      const cardWrapper = document.getElementById("cardWrapper");
+      const thumb = document.getElementById("thumb");
+      const closeBtn = document.getElementById("closeBtn");
+      const pinBtn = document.getElementById("pinBtn");
+      const progressFill = document.getElementById("progressFill");
+      const progress = document.querySelector(".progress");
+      const videoBadge = document.getElementById("videoBadge");
+
+      let dismissed = false;
+      let pinned = false;
+      let canOpenFile = false;
+
+      function dismiss() {
+        if (dismissed) return;
+        dismissed = true;
+        cardWrapper.classList.remove("visible");
+        cardWrapper.classList.add("dismissing");
+        setTimeout(() => window.preview.close(), 250);
+      }
+
+      function togglePin() {
+        pinned = !pinned;
+        pinBtn.classList.toggle("pinned", pinned);
+        cardWrapper.classList.toggle("draggable", pinned);
+        window.preview.pin(pinned);
+        if (pinned) {
+          progressFill.style.animationPlayState = "paused";
+          progress.style.opacity = "0";
+        } else {
+          // Resume countdown from where it left off
+          progress.style.opacity = "1";
+          progressFill.style.animationPlayState = "running";
+        }
+      }
+
+      progressFill.addEventListener("animationend", dismiss);
+      closeBtn.addEventListener("click", dismiss);
+      pinBtn.addEventListener("click", togglePin);
+      videoBadge.addEventListener("click", () => {
+        if (canOpenFile) window.preview.openFile();
+      });
+
+      const editBtn = document.getElementById("editBtn");
+
+      editBtn.addEventListener("click", () => {
+        // Auto-pin so preview doesn't dismiss while annotating
+        if (!pinned) togglePin();
+        window.preview.edit();
+      });
+
+      // Thumb: click opens file location, drag moves window (when pinned)
+      let thumbStart = null;
+      let thumbDragged = false;
+
+      thumb.addEventListener("pointerdown", async (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        thumb.setPointerCapture(e.pointerId);
+        thumbDragged = false;
+        thumbStart = { x: e.screenX, y: e.screenY, bounds: null };
+        if (pinned) thumbStart.bounds = await window.preview.getBounds();
+      });
+
+      thumb.addEventListener("pointermove", (e) => {
+        if (!thumbStart) return;
+        const dx = e.screenX - thumbStart.x;
+        const dy = e.screenY - thumbStart.y;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          thumbDragged = true;
+          if (pinned && thumbStart.bounds) {
+            window.preview.setBounds({
+              x: thumbStart.bounds.x + dx,
+              y: thumbStart.bounds.y + dy,
+              width: thumbStart.bounds.width,
+              height: thumbStart.bounds.height,
+            });
+          }
+        }
+      });
+
+      thumb.addEventListener("pointerup", () => {
+        if (!thumbStart) return;
+        const wasDrag = thumbDragged;
+        thumbStart = null;
+        thumbDragged = false;
+        if (!wasDrag && canOpenFile) window.preview.openFile();
+      });
+
+      // Custom resize handles (needed because shadow padding pushes card away from window edges)
+      const SHADOW_PAD = 40;
+      const MIN_W = 140 + SHADOW_PAD * 2;
+      const MIN_H = 80 + SHADOW_PAD * 2;
+
+      document.querySelectorAll(".resize-handle").forEach((handle) => {
+        handle.addEventListener("pointerdown", async (e) => {
+          if (!pinned) return;
+          e.preventDefault();
+          e.stopPropagation();
+          handle.setPointerCapture(e.pointerId);
+
+          const dir = handle.dataset.dir;
+          const startX = e.screenX;
+          const startY = e.screenY;
+          const startBounds = await window.preview.getBounds();
+          const aspect = startBounds.width / startBounds.height;
+
+          function onMove(e) {
+            const dx = e.screenX - startX;
+            const dy = e.screenY - startY;
+            let { x, y, width, height } = startBounds;
+
+            if (dir.includes("e")) width += dx;
+            if (dir.includes("s")) height += dy;
+            if (dir.includes("w")) { width -= dx; x += dx; }
+            if (dir.includes("n")) { height -= dy; y += dy; }
+
+            // Enforce aspect ratio
+            if (dir.length === 2) {
+              // Corner drag — derive height from width using aspect ratio
+              height = Math.round(width / aspect);
+              if (dir.includes("n")) y = startBounds.y + startBounds.height - height;
+            }
+
+            if (width < MIN_W) { width = MIN_W; if (dir.includes("w")) x = startBounds.x + startBounds.width - MIN_W; }
+            if (height < MIN_H) { height = MIN_H; if (dir.includes("n")) y = startBounds.y + startBounds.height - MIN_H; }
+
+            window.preview.setBounds({ x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) });
+          }
+
+          function onUp() {
+            handle.removeEventListener("pointermove", onMove);
+            handle.removeEventListener("pointerup", onUp);
+          }
+
+          handle.addEventListener("pointermove", onMove);
+          handle.addEventListener("pointerup", onUp);
+        });
+      });
+
+      window.preview.onShow((data) => {
+        // Validate data URL before assigning
+        if (typeof data.imageDataUrl === "string" && data.imageDataUrl.startsWith("data:image/")) {
+          thumb.src = data.imageDataUrl;
+        }
+        canOpenFile = data.hasFile;
+        if (canOpenFile) thumb.style.cursor = "pointer";
+
+        if (data.isVideo) {
+          videoBadge.style.display = "block";
+          editBtn.style.display = "none";
+        }
+
+        // Restore pinned state for persistent thumbnails
+        if (data.pinned && !pinned) {
+          pinned = true;
+          pinBtn.classList.add("pinned");
+          progressFill.style.animationPlayState = "paused";
+          progress.style.opacity = "0";
+        }
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            cardWrapper.classList.add("visible");
+            // Defer draggable class so Electron registers the drag region
+            // after the window is fully visible
+            if (pinned) {
+              setTimeout(() => cardWrapper.classList.add("draggable"), 100);
+            }
+          });
+        });
+      });
+
+      window.preview.onUpdate((data) => {
+        if (typeof data.imageDataUrl === "string" && data.imageDataUrl.startsWith("data:image/")) {
+          thumb.src = data.imageDataUrl;
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -2,6 +2,7 @@
 <html>
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:">
     <style>
       * {
         margin: 0;
@@ -26,7 +27,7 @@
 
       .dim {
         position: absolute;
-        background: rgba(0, 0, 0, 0.4);
+        background: rgba(0, 0, 0, 0.35);
       }
 
       .dim-top {
@@ -51,22 +52,35 @@
 
       .selection {
         position: absolute;
-        border: 2px solid #fff;
+        border: 2px solid rgba(255, 255, 255, 0.9);
         pointer-events: none;
+        border-radius: 4px;
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.15),
+          0 0 20px rgba(255, 255, 255, 0.1),
+          inset 0 0 20px rgba(255, 255, 255, 0.03);
       }
 
       .dimensions {
         position: absolute;
-        bottom: -24px;
+        bottom: -32px;
         left: 50%;
         transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.7);
-        color: #fff;
-        font-family: system-ui, sans-serif;
-        font-size: 12px;
-        padding: 2px 8px;
-        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(40px) saturate(1.8);
+        -webkit-backdrop-filter: blur(40px) saturate(1.8);
+        color: rgba(255, 255, 255, 0.95);
+        font-family: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.03em;
+        padding: 4px 12px;
+        border-radius: 20px;
         white-space: nowrap;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow:
+          0 2px 12px rgba(0, 0, 0, 0.2),
+          inset 0 0.5px 0 rgba(255, 255, 255, 0.3);
       }
 
       .instructions {
@@ -74,94 +88,262 @@
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        color: #fff;
-        font-family: system-ui, sans-serif;
-        font-size: 18px;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 12px 24px;
-        border-radius: 8px;
+        color: rgba(255, 255, 255, 0.95);
+        font-family: -apple-system, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+        font-size: 16px;
+        font-weight: 400;
+        letter-spacing: 0.01em;
+        background: rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(60px) saturate(1.8);
+        -webkit-backdrop-filter: blur(60px) saturate(1.8);
+        padding: 16px 28px;
+        border-radius: 20px;
         pointer-events: none;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        box-shadow:
+          0 8px 32px rgba(0, 0, 0, 0.3),
+          0 2px 8px rgba(0, 0, 0, 0.2);
       }
 
       .no-selection {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.4);
+        background: rgba(0, 0, 0, 0.35);
+      }
+
+      .recording-border {
+        position: absolute;
+        border: 2px solid rgba(255, 59, 48, 0.8);
+        pointer-events: none;
+        border-radius: 4px;
+        box-shadow:
+          0 0 0 1px rgba(255, 59, 48, 0.2),
+          0 0 24px rgba(255, 59, 48, 0.15),
+          inset 0 0 24px rgba(255, 59, 48, 0.05);
+        animation: border-pulse 2s ease-in-out infinite;
+      }
+
+      @keyframes border-pulse {
+        0%, 100% {
+          border-color: rgba(255, 59, 48, 0.8);
+          box-shadow:
+            0 0 0 1px rgba(255, 59, 48, 0.2),
+            0 0 24px rgba(255, 59, 48, 0.15),
+            inset 0 0 24px rgba(255, 59, 48, 0.05);
+        }
+        50% {
+          border-color: rgba(255, 100, 80, 0.9);
+          box-shadow:
+            0 0 0 1px rgba(255, 100, 80, 0.3),
+            0 0 32px rgba(255, 59, 48, 0.25),
+            inset 0 0 32px rgba(255, 59, 48, 0.08);
+        }
       }
     </style>
   </head>
   <body>
-    <div id="overlay"></div>
+    <div id="overlay">
+      <!-- Persistent DOM elements — styles updated directly, no innerHTML during drag -->
+      <div id="dim-top" class="dim dim-top" hidden></div>
+      <div id="dim-left" class="dim dim-left" hidden></div>
+      <div id="dim-right" class="dim dim-right" hidden></div>
+      <div id="dim-bottom" class="dim dim-bottom" hidden></div>
+      <div id="sel" class="selection" hidden>
+        <div id="dims" class="dimensions"></div>
+      </div>
+      <div id="no-sel" class="no-selection" hidden></div>
+      <div id="instr" class="instructions" hidden></div>
+      <div id="rec-border" class="recording-border" hidden></div>
+    </div>
     <script>
-      const overlay = document.getElementById("overlay");
+      // --- Cached DOM refs (no lookups during drag) ---
+      const $dimT = document.getElementById("dim-top");
+      const $dimL = document.getElementById("dim-left");
+      const $dimR = document.getElementById("dim-right");
+      const $dimB = document.getElementById("dim-bottom");
+      const $sel  = document.getElementById("sel");
+      const $dims = document.getElementById("dims");
+      const $noSel = document.getElementById("no-sel");
+      const $instr = document.getElementById("instr");
+      const $rec   = document.getElementById("rec-border");
 
+      // --- Persistent screen capture streams ---
+      const captureStreams = {};
+      const captureCanvas = document.createElement("canvas");
+      const captureCtx = captureCanvas.getContext("2d");
+      let currentDisplayId = null;
+
+      (async function initStreams() {
+        try {
+          const sources = await window.qgn.getSources();
+          for (const { id, displayId } of sources) {
+            const video = document.createElement("video");
+            video.style.display = "none";
+            document.body.appendChild(video);
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: {
+                mandatory: {
+                  chromeMediaSource: "desktop",
+                  chromeMediaSourceId: id,
+                },
+              },
+            });
+            video.srcObject = stream;
+            await video.play();
+            captureStreams[displayId] = video;
+          }
+        } catch (e) {
+          console.error("Failed to init capture streams:", e);
+        }
+      })();
+
+      window.qgn.onActivateCapture(({ displayId }) => {
+        currentDisplayId = displayId;
+        const video = captureStreams[displayId];
+        if (video) {
+          captureCanvas.width = video.videoWidth;
+          captureCanvas.height = video.videoHeight;
+          captureCtx.drawImage(video, 0, 0);
+        }
+        reset();
+      });
+
+      function cropAndSendCapture(region) {
+        const scaleX = captureCanvas.width / window.innerWidth;
+        const scaleY = captureCanvas.height / window.innerHeight;
+        const sx = Math.round(region.x * scaleX);
+        const sy = Math.round(region.y * scaleY);
+        const sw = Math.round(region.width * scaleX);
+        const sh = Math.round(region.height * scaleY);
+
+        const crop = document.createElement("canvas");
+        crop.width = sw;
+        crop.height = sh;
+        crop.getContext("2d").drawImage(
+          captureCanvas, sx, sy, sw, sh, 0, 0, sw, sh
+        );
+        crop.toBlob((blob) => {
+          blob.arrayBuffer().then((buf) => {
+            window.qgn.capture(new Uint8Array(buf));
+          });
+        }, "image/png");
+      }
+
+      // --- Selection state ---
       let isSelecting = false;
       let startX = 0;
       let startY = 0;
       let endX = 0;
       let endY = 0;
+      let mode = "screenshot";
+      let rafId = 0;
 
-      function getRect() {
+      function showInitial() {
+        // Show the "click and drag" prompt
+        hideAllSelection();
+        $noSel.hidden = false;
+        $instr.hidden = false;
+        $instr.textContent = mode === "video"
+          ? "Click and drag to select recording area. Press ESC to cancel."
+          : "Click and drag to select area. Press ESC to cancel.";
+      }
+
+      function hideAllSelection() {
+        $dimT.hidden = $dimL.hidden = $dimR.hidden = $dimB.hidden = true;
+        $sel.hidden = true;
+        $noSel.hidden = true;
+        $instr.hidden = true;
+        $rec.hidden = true;
+      }
+
+      function renderFrame() {
+        rafId = 0;
         const x = Math.min(startX, endX);
         const y = Math.min(startY, endY);
         const w = Math.abs(endX - startX);
         const h = Math.abs(endY - startY);
-        return { x, y, width: w, height: h };
+
+        if (w < 2 && h < 2) {
+          $sel.hidden = true;
+          $dimT.hidden = $dimL.hidden = $dimR.hidden = $dimB.hidden = true;
+          $noSel.hidden = false;
+          $instr.hidden = true;
+          return;
+        }
+
+        $noSel.hidden = true;
+        $instr.hidden = true;
+
+        // Update dim regions via style properties (no layout thrash — reads batched before writes)
+        const s = $dimT.style;
+        s.height = y + "px";
+        $dimT.hidden = false;
+
+        const sl = $dimL.style;
+        sl.top = y + "px";
+        sl.height = h + "px";
+        sl.width = x + "px";
+        $dimL.hidden = false;
+
+        const sr = $dimR.style;
+        sr.top = y + "px";
+        sr.height = h + "px";
+        sr.left = (x + w) + "px";
+        $dimR.hidden = false;
+
+        const sb = $dimB.style;
+        sb.top = (y + h) + "px";
+        $dimB.hidden = false;
+
+        const ss = $sel.style;
+        ss.left = x + "px";
+        ss.top = y + "px";
+        ss.width = w + "px";
+        ss.height = h + "px";
+        $sel.hidden = false;
+
+        $dims.textContent = Math.round(w) + " × " + Math.round(h);
       }
 
-      function render() {
-        if (!isSelecting && startX === 0 && startY === 0) {
-          overlay.innerHTML = `
-            <div class="no-selection"></div>
-            <div class="instructions">Click and drag to select area. Press ESC to cancel.</div>
-          `;
-          return;
-        }
-
-        const r = getRect();
-        if (r.width < 2 && r.height < 2) {
-          overlay.innerHTML = `<div class="no-selection"></div>`;
-          return;
-        }
-
-        overlay.innerHTML = `
-          <div class="dim dim-top" style="height:${r.y}px"></div>
-          <div class="dim dim-left" style="top:${r.y}px;height:${r.height}px;width:${r.x}px"></div>
-          <div class="dim dim-right" style="top:${r.y}px;height:${r.height}px;left:${r.x + r.width}px"></div>
-          <div class="dim dim-bottom" style="top:${r.y + r.height}px"></div>
-          <div class="selection" style="left:${r.x}px;top:${r.y}px;width:${r.width}px;height:${r.height}px">
-            <div class="dimensions">${Math.round(r.width)} × ${Math.round(r.height)}</div>
-          </div>
-        `;
+      function scheduleRender() {
+        if (!rafId) rafId = requestAnimationFrame(renderFrame);
       }
 
       document.addEventListener("mousedown", (e) => {
+        window.qgn.closeMicDropdown();
         isSelecting = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        endX = e.clientX;
-        endY = e.clientY;
-        render();
+        startX = endX = e.clientX;
+        startY = endY = e.clientY;
+        scheduleRender();
       });
 
       document.addEventListener("mousemove", (e) => {
         if (!isSelecting) return;
         endX = e.clientX;
         endY = e.clientY;
-        render();
+        scheduleRender();
       });
 
       document.addEventListener("mouseup", () => {
         if (!isSelecting) return;
         isSelecting = false;
 
-        const r = getRect();
-        if (r.width < 5 || r.height < 5) {
+        const x = Math.min(startX, endX);
+        const y = Math.min(startY, endY);
+        const w = Math.abs(endX - startX);
+        const h = Math.abs(endY - startY);
+
+        if (w < 5 || h < 5) {
           reset();
           return;
         }
 
-        window.qgn.capture(r);
+        if (mode === "video") {
+          window.qgn.startVideoRecording({ x, y, width: w, height: h });
+        } else {
+          cropAndSendCapture({ x, y, width: w, height: h });
+        }
         clear();
       });
 
@@ -173,22 +355,51 @@
       });
 
       function reset() {
+        mode = "screenshot";
         isSelecting = false;
-        startX = 0;
-        startY = 0;
-        endX = 0;
-        endY = 0;
-        render();
+        startX = startY = endX = endY = 0;
+        if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+        showInitial();
+      }
+
+      function resetForVideo() {
+        mode = "video";
+        isSelecting = false;
+        startX = startY = endX = endY = 0;
+        if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+        showInitial();
+      }
+
+      function showRecordingBorder(region) {
+        hideAllSelection();
+        const rs = $rec.style;
+        rs.left = region.x + "px";
+        rs.top = region.y + "px";
+        rs.width = region.width + "px";
+        rs.height = region.height + "px";
+        $rec.hidden = false;
+      }
+
+      function hideRecordingBorder() {
+        $rec.hidden = true;
       }
 
       function clear() {
         isSelecting = false;
-        startX = 0;
-        startY = 0;
-        endX = 0;
-        endY = 0;
-        overlay.innerHTML = "";
+        startX = startY = endX = endY = 0;
+        if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+        hideAllSelection();
       }
+
+      // Clean up persistent streams when window unloads
+      window.addEventListener("beforeunload", () => {
+        for (const [, video] of Object.entries(captureStreams)) {
+          if (video.srcObject) {
+            video.srcObject.getTracks().forEach((t) => t.stop());
+          }
+          video.remove();
+        }
+      });
     </script>
   </body>
 </html>

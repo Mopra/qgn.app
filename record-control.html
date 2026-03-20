@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:">
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+        user-select: none;
+      }
+
+      .bar {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(30, 30, 30, 0.85);
+        backdrop-filter: blur(60px) saturate(1.8);
+        -webkit-backdrop-filter: blur(60px) saturate(1.8);
+        border-radius: 22px;
+        padding: 7px 14px;
+        font-family: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+        color: rgba(255, 255, 255, 0.95);
+        font-size: 13px;
+        font-weight: 400;
+        -webkit-app-region: drag;
+        height: 100%;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        box-shadow:
+          0 8px 32px rgba(0, 0, 0, 0.25),
+          0 2px 8px rgba(0, 0, 0, 0.15),
+          inset 0 0.5px 0 rgba(255, 255, 255, 0.4);
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #ff3b30;
+        animation: pulse 1.2s ease-in-out infinite;
+        flex-shrink: 0;
+        box-shadow: 0 0 8px rgba(255, 59, 48, 0.5);
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          box-shadow: 0 0 8px rgba(255, 59, 48, 0.5);
+        }
+        50% {
+          opacity: 0.4;
+          box-shadow: 0 0 12px rgba(255, 59, 48, 0.3);
+        }
+      }
+
+      .timer {
+        font-variant-numeric: tabular-nums;
+        min-width: 48px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+      }
+
+      .sep {
+        width: 1px;
+        height: 18px;
+        background: rgba(255, 255, 255, 0.2);
+        flex-shrink: 0;
+      }
+
+      .toggle-btn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+        color: rgba(255, 255, 255, 0.85);
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        -webkit-app-region: no-drag;
+        position: relative;
+        padding: 0;
+        transition: all 0.2s ease;
+      }
+
+      .toggle-btn:hover {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.35);
+      }
+
+      .toggle-btn.active {
+        background: rgba(255, 255, 255, 0.22);
+        border-color: rgba(255, 255, 255, 0.5);
+        color: #fff;
+        box-shadow:
+          inset 0 0.5px 0 rgba(255, 255, 255, 0.4),
+          0 0 8px rgba(255, 255, 255, 0.08);
+      }
+
+      .toggle-btn svg {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+      }
+
+      .toggle-btn .slash {
+        display: none;
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 22px;
+        height: 22px;
+        pointer-events: none;
+      }
+
+      .toggle-btn:not(.active) .slash {
+        display: block;
+      }
+
+      /* Device selector wrapper */
+      .device-group {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 0;
+      }
+
+      .device-group .toggle-btn {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+        border-right: none;
+      }
+
+      .chevron-btn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-left: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 0 10px 10px 0;
+        color: rgba(255, 255, 255, 0.6);
+        width: 16px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        -webkit-app-region: no-drag;
+        padding: 0;
+        transition: all 0.2s ease;
+      }
+
+      .chevron-btn:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      .chevron-btn svg {
+        width: 10px;
+        height: 10px;
+        fill: currentColor;
+      }
+
+      .stop-btn {
+        background: rgba(255, 59, 48, 0.85);
+        color: #fff;
+        border: 1px solid rgba(255, 59, 48, 0.5);
+        border-radius: 10px;
+        padding: 5px 14px;
+        font-size: 12px;
+        font-weight: 500;
+        font-family: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+        cursor: pointer;
+        -webkit-app-region: no-drag;
+        transition: all 0.2s ease;
+        box-shadow:
+          0 2px 8px rgba(255, 59, 48, 0.3),
+          inset 0 0.5px 0 rgba(255, 255, 255, 0.2);
+      }
+
+      .stop-btn:hover {
+        background: rgba(255, 59, 48, 1);
+        box-shadow:
+          0 2px 12px rgba(255, 59, 48, 0.4),
+          inset 0 0.5px 0 rgba(255, 255, 255, 0.25);
+      }
+
+      .phase {
+        display: none;
+        align-items: center;
+        gap: 10px;
+        height: 100%;
+      }
+
+      .phase.active {
+        display: flex;
+      }
+
+      .label {
+        font-size: 12px;
+        opacity: 0.6;
+        white-space: nowrap;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bar">
+      <!-- Setup phase: just audio toggles while user selects area -->
+      <div class="phase active" id="setupPhase">
+        <span class="label">Audio:</span>
+
+        <button class="toggle-btn" id="audioBtn" title="System audio">
+          <svg viewBox="0 0 24 24">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+          <svg class="slash" viewBox="0 0 24 24">
+            <line x1="3" y1="3" x2="21" y2="21" stroke="#ff3b30" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+
+        <div class="device-group">
+          <button class="toggle-btn" id="micBtn" title="Microphone">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+            <svg class="slash" viewBox="0 0 24 24">
+              <line x1="3" y1="3" x2="21" y2="21" stroke="#ff3b30" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="chevron-btn" id="micChevron" title="Select microphone">
+            <svg viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Recording phase: dot + timer + Stop -->
+      <div class="phase" id="recordingPhase">
+        <div class="dot"></div>
+        <span class="timer" id="timer">0:00</span>
+        <div class="sep"></div>
+        <button class="stop-btn" id="stopBtn">Stop</button>
+      </div>
+    </div>
+
+    <!-- Hidden video element for capturing the stream -->
+    <video id="video" style="position: fixed; left: -9999px"></video>
+    <canvas id="canvas" style="position: fixed; left: -9999px"></canvas>
+
+    <script>
+      const setupPhase = document.getElementById("setupPhase");
+      const recordingPhase = document.getElementById("recordingPhase");
+      const timerEl = document.getElementById("timer");
+      const stopBtn = document.getElementById("stopBtn");
+      const audioBtn = document.getElementById("audioBtn");
+      const micBtn = document.getElementById("micBtn");
+      const micChevron = document.getElementById("micChevron");
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("canvas");
+
+      let audioEnabled = false;
+      let micEnabled = false;
+      let selectedMicId = "default";
+      let mediaRecorder = null;
+      let chunks = [];
+      let startTime = 0;
+      let timerInterval = null;
+      let animFrame = null;
+      let allStreams = [];
+      let thumbnailDataUrl = null;
+
+      audioBtn.addEventListener("click", () => {
+        audioEnabled = !audioEnabled;
+        audioBtn.classList.toggle("active", audioEnabled);
+      });
+
+      micBtn.addEventListener("click", () => {
+        micEnabled = !micEnabled;
+        micBtn.classList.toggle("active", micEnabled);
+      });
+
+      // Open mic device picker as a separate popup window
+      micChevron.addEventListener("click", () => {
+        window.qgnRecord.openMicDropdown();
+      });
+
+      // Listen for device selection from the popup
+      window.qgnRecord.onMicDeviceSelected((deviceId) => {
+        selectedMicId = deviceId;
+      });
+
+      // Main sends start-recording when user finishes area selection
+      window.qgnRecord.onStartRecording(async (data) => {
+        const { sourceId, region } = data;
+
+        // Switch to recording UI
+        setupPhase.classList.remove("active");
+        recordingPhase.classList.add("active");
+
+        try {
+          // Get screen video stream
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              mandatory: {
+                chromeMediaSource: "desktop",
+                chromeMediaSourceId: sourceId,
+              },
+            },
+          });
+          allStreams.push(stream);
+
+          video.srcObject = stream;
+          await video.play();
+
+          // Set up canvas for cropping
+          canvas.width = region.width;
+          canvas.height = region.height;
+          const ctx = canvas.getContext("2d");
+
+          function drawFrame() {
+            ctx.drawImage(
+              video,
+              region.x,
+              region.y,
+              region.width,
+              region.height,
+              0,
+              0,
+              region.width,
+              region.height
+            );
+            animFrame = requestAnimationFrame(drawFrame);
+          }
+          drawFrame();
+
+          // Build recording stream from canvas video
+          const canvasStream = canvas.captureStream(30);
+          const recordingStream = new MediaStream();
+          canvasStream.getVideoTracks().forEach((t) => recordingStream.addTrack(t));
+
+          // Add audio sources based on toggle states
+          let audioCtx = null;
+          let mixedDest = null;
+
+          if (audioEnabled || micEnabled) {
+            audioCtx = new AudioContext();
+            mixedDest = audioCtx.createMediaStreamDestination();
+
+            if (audioEnabled) {
+              try {
+                const sysStream = await navigator.mediaDevices.getUserMedia({
+                  audio: {
+                    mandatory: { chromeMediaSource: "desktop" },
+                  },
+                  video: {
+                    mandatory: { chromeMediaSource: "desktop" },
+                  },
+                });
+                sysStream.getVideoTracks().forEach((t) => t.stop());
+                allStreams.push(sysStream);
+                const sysSource = audioCtx.createMediaStreamSource(sysStream);
+                sysSource.connect(mixedDest);
+              } catch (e) { console.warn("System audio unavailable:", e.message); }
+            }
+
+            if (micEnabled) {
+              try {
+                const micConstraints = selectedMicId && selectedMicId !== "default"
+                  ? { audio: { deviceId: { exact: selectedMicId } }, video: false }
+                  : { audio: true, video: false };
+                const micStream = await navigator.mediaDevices.getUserMedia(micConstraints);
+                allStreams.push(micStream);
+                const micSource = audioCtx.createMediaStreamSource(micStream);
+                micSource.connect(mixedDest);
+              } catch (e) { console.warn("Microphone unavailable:", e.message); }
+            }
+
+            const mixedTracks = mixedDest.stream.getAudioTracks();
+            if (mixedTracks.length > 0) {
+              recordingStream.addTrack(mixedTracks[0]);
+            }
+          }
+
+          mediaRecorder = new MediaRecorder(recordingStream, {
+            mimeType: "video/webm;codecs=vp9,opus",
+            videoBitsPerSecond: 5000000,
+          });
+
+          chunks = [];
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) chunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = async () => {
+            cancelAnimationFrame(animFrame);
+            allStreams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
+            if (audioCtx) {
+              audioCtx.close();
+            }
+
+            const blob = new Blob(chunks, { type: "video/webm" });
+            const buffer = await blob.arrayBuffer();
+            window.qgnRecord.saveRecording(
+              new Uint8Array(buffer),
+              thumbnailDataUrl
+            );
+          };
+
+          mediaRecorder.start(100);
+          startTime = Date.now();
+          timerInterval = setInterval(updateTimer, 1000);
+        } catch (err) {
+          console.error("Recording failed:", err);
+        }
+      });
+
+      function updateTimer() {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const m = Math.floor(elapsed / 60);
+        const s = String(elapsed % 60).padStart(2, "0");
+        timerEl.textContent = `${m}:${s}`;
+      }
+
+      window.qgnRecord.onStopRecording(() => {
+        stopRecording();
+      });
+
+      stopBtn.addEventListener("click", () => {
+        stopRecording();
+      });
+
+      function stopRecording() {
+        clearInterval(timerInterval);
+        // Capture thumbnail from the current canvas frame before stopping
+        try {
+          thumbnailDataUrl = canvas.toDataURL("image/png");
+        } catch (e) {
+          thumbnailDataUrl = null;
+        }
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+          mediaRecorder.stop();
+        }
+      }
+    </script>
+  </body>
+</html>
