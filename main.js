@@ -1,3 +1,4 @@
+// QGN – Quick screenshot capture tool
 const {
   app,
   BrowserWindow,
