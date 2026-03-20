@@ -14,6 +14,7 @@ const {
 } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const { autoUpdater } = require("electron-updater");
 
 // ── Constants ──
 const CARD_WIDTH = 260;
@@ -155,6 +156,7 @@ let micDropdownWindow = null;
 let selectedMicId = "default";
 let annotationWindow = null;
 let annotationSourcePreview = null;
+let updateWindow = null;
 let pinnedDataDir;
 let pinnedManifestPath;
 
@@ -876,6 +878,87 @@ function createTray() {
   rebuildTrayMenu();
 }
 
+function showUpdateToast() {
+  if (updateWindow && !updateWindow.isDestroyed()) {
+    updateWindow.destroy();
+  }
+
+  const display = screen.getPrimaryDisplay();
+  const w = 380;
+  const h = 44;
+  const x = display.workArea.x + Math.round(display.workArea.width / 2) - Math.round(w / 2);
+  const y = display.workArea.y + display.workArea.height - TOAST_OFFSET_Y;
+
+  updateWindow = new BrowserWindow({
+    width: w,
+    height: h,
+    x,
+    y,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    movable: false,
+    focusable: true,
+    show: false,
+    webPreferences: secureWebPrefs("update-preload.js"),
+  });
+
+  updateWindow.setAlwaysOnTop(true, "screen-saver");
+  updateWindow.loadFile("toast-update.html");
+
+  updateWindow.once("ready-to-show", () => {
+    if (updateWindow && !updateWindow.isDestroyed()) {
+      updateWindow.showInactive();
+    }
+  });
+
+  updateWindow.on("closed", () => {
+    updateWindow = null;
+  });
+}
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = console;
+
+  autoUpdater.on("update-available", () => {
+    showUpdateToast();
+    if (updateWindow && !updateWindow.isDestroyed()) {
+      updateWindow.webContents.send("update-status", { status: "downloading", percent: 0 });
+    }
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    if (updateWindow && !updateWindow.isDestroyed()) {
+      updateWindow.webContents.send("update-status", { status: "downloading", percent: progress.percent });
+    }
+  });
+
+  autoUpdater.on("update-downloaded", () => {
+    if (updateWindow && !updateWindow.isDestroyed()) {
+      updateWindow.webContents.send("update-status", { status: "ready" });
+    } else {
+      showUpdateToast();
+      updateWindow.webContents.once("did-finish-load", () => {
+        updateWindow.webContents.send("update-status", { status: "ready" });
+      });
+    }
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.error("Auto-update error:", err);
+  });
+
+  // Check for updates now and every 4 hours
+  autoUpdater.checkForUpdates().catch(() => {});
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 4 * 60 * 60 * 1000);
+}
+
 app.whenReady().then(() => {
   configPath = path.join(app.getPath("userData"), "settings.json");
   pinnedDataDir = path.join(app.getPath("userData"), "pinned");
@@ -886,6 +969,18 @@ app.whenReady().then(() => {
   restorePinnedPreviews();
 
   registerHotkeys();
+  setupAutoUpdater();
+
+  ipcMain.on("update-install", () => {
+    autoUpdater.quitAndInstall(false, true);
+  });
+
+  ipcMain.on("update-dismiss", () => {
+    if (updateWindow && !updateWindow.isDestroyed()) {
+      updateWindow.destroy();
+      updateWindow = null;
+    }
+  });
 
   ipcMain.handle("get-sources", async () => {
     const sources = await desktopCapturer.getSources({

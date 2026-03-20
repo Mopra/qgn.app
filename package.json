@@ -3,18 +3,57 @@
   "productName": "QGN",
   "version": "0.1.0",
   "description": "Quick screenshot capture tool",
+  "author": "Mopra",
   "main": "main.js",
   "scripts": {
     "start": "node -e \"delete process.env.ELECTRON_RUN_AS_NODE; require('child_process').spawn(require('electron'), ['.'], {stdio:'inherit',detached:true}).unref(); process.exit()\"",
-    "build": "npx @electron/packager . QGN --platform=win32 --arch=x64 --icon=icons/icon.ico --out=dist --overwrite --no-prune",
+    "build": "electron-builder --win",
     "generate-icons": "node scripts/generate-icons.js"
   },
+  "build": {
+    "appId": "com.mopra.qgn",
+    "productName": "QGN",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "annotation-preload.js",
+      "dropdown-preload.js",
+      "preview-preload.js",
+      "record-preload.js",
+      "settings-preload.js",
+      "update-preload.js",
+      "*.html",
+      "icons/**/*",
+      "assets/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "icons/icon.ico",
+      "uninstallerIcon": "icons/icon.ico",
+      "installerHeaderIcon": "icons/icon.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Mopra",
+      "repo": "qgn.app"
+    }
+  },
   "dependencies": {
+    "electron-updater": "^6.8.3",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
-    "@electron/packager": "^18.3.0",
     "electron": "^35.0.0",
+    "electron-builder": "^25.1.8",
     "electron-reloader": "^1.2.3"
   }
 }

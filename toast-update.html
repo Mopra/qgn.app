@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+        -webkit-app-region: no-drag;
+      }
+      .toast {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px 9px 20px;
+        background: rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(60px) saturate(1.8);
+        -webkit-backdrop-filter: blur(60px) saturate(1.8);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 20px;
+        font: 13px/1 -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.95);
+        letter-spacing: 0.01em;
+        opacity: 0;
+        transform: translateY(6px) scale(0.96);
+        animation: fadeIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        box-shadow:
+          0 8px 32px rgba(0, 0, 0, 0.25),
+          0 2px 8px rgba(0, 0, 0, 0.15),
+          inset 0 0.5px 0 rgba(255, 255, 255, 0.4);
+      }
+      .btn {
+        padding: 5px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.15);
+        color: rgba(255, 255, 255, 0.95);
+        font: 12px/1 -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease;
+        letter-spacing: 0.01em;
+      }
+      .btn:hover { background: rgba(255, 255, 255, 0.25); }
+      .btn-restart { background: rgba(99, 179, 237, 0.3); border-color: rgba(99, 179, 237, 0.4); }
+      .btn-restart:hover { background: rgba(99, 179, 237, 0.45); }
+      .dismiss {
+        padding: 4px 8px;
+        border: none;
+        border-radius: 10px;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.4);
+        font: 12px/1 -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+        cursor: pointer;
+        transition: color 0.15s ease;
+      }
+      .dismiss:hover { color: rgba(255, 255, 255, 0.7); }
+      @keyframes fadeIn {
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toast">
+      <span id="message">Update available</span>
+      <button class="btn btn-restart" id="action-btn" onclick="window.updateAPI.installUpdate()">Restart</button>
+      <button class="dismiss" onclick="window.updateAPI.dismiss()">Later</button>
+    </div>
+    <script src="toast-update-renderer.js"></script>
+  </body>
+</html>
