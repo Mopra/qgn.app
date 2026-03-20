@@ -37,6 +37,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "artifactName": "QGN-Setup.${ext}",
       "installerIcon": "icons/icon.ico",
       "uninstallerIcon": "icons/icon.ico",
       "installerHeaderIcon": "icons/icon.ico"
