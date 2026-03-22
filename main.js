@@ -770,13 +770,14 @@ function stopRecordingUI() {
   isRecording = false;
 }
 
-function saveRecording(data, thumbnailDataUrl) {
+function saveRecording(data, thumbnailDataUrl, format) {
   try {
     const folder = getSaveFolder();
     fs.mkdirSync(folder, { recursive: true });
 
+    const ext = format === "mp4" ? "mp4" : "webm";
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filePath = path.join(folder, `qgn-${timestamp}.webm`);
+    const filePath = path.join(folder, `qgn-${timestamp}.${ext}`);
     fs.writeFileSync(filePath, Buffer.from(data));
 
     stopRecordingUI();
@@ -1009,8 +1010,8 @@ app.whenReady().then(() => {
     beginVideoRecording(region);
   });
 
-  ipcMain.on("save-recording", (_event, data, thumbnail) => {
-    saveRecording(data, thumbnail);
+  ipcMain.on("save-recording", (_event, data, thumbnail, format) => {
+    saveRecording(data, thumbnail, format);
   });
 
   ipcMain.on("open-mic-dropdown", () => {

@@ -392,8 +392,11 @@
             }
           }
 
+          const mp4Supported = MediaRecorder.isTypeSupported("video/mp4;codecs=avc1,mp4a.40.2");
+          const mimeType = mp4Supported ? "video/mp4;codecs=avc1,mp4a.40.2" : "video/webm;codecs=vp9,opus";
+
           mediaRecorder = new MediaRecorder(recordingStream, {
-            mimeType: "video/webm;codecs=vp9,opus",
+            mimeType,
             videoBitsPerSecond: 5000000,
           });
 
@@ -409,11 +412,12 @@
               audioCtx.close();
             }
 
-            const blob = new Blob(chunks, { type: "video/webm" });
+            const blob = new Blob(chunks, { type: mimeType });
             const buffer = await blob.arrayBuffer();
             window.qgnRecord.saveRecording(
               new Uint8Array(buffer),
-              thumbnailDataUrl
+              thumbnailDataUrl,
+              mp4Supported ? "mp4" : "webm"
             );
           };
 

@@ -34,7 +34,11 @@ QGN is a lightweight desktop tool that lets you capture screen regions instantly
 - **Sharp** — Image processing and format conversion
 - **Vanilla JS** — No framework overhead
 
-## Getting Started
+## Download
+
+Grab the latest installer from the [Releases](https://github.com/Mopra/qgn.app/releases) page — download the `.exe` and run it.
+
+## Development
 
 ### Prerequisites
 
@@ -55,7 +59,7 @@ npm start
 npm run build
 ```
 
-Produces a Windows x64 executable in the `dist/` directory.
+Produces a Windows installer in the `dist/` directory.
 
 ## License
 
