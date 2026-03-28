@@ -27,7 +27,7 @@ const TOAST_DURATION_MS = 3100;
 const ANNOTATION_AREA_FRACTION = 0.85;
 const ANNOTATION_PAD = 80;
 const ANNOTATION_TOOLBAR_H = 48;
-const MIN_ANNOTATION_W = 500;
+const MIN_ANNOTATION_W = 660;
 const MIN_ANNOTATION_H = 400;
 const PREVIEW_MIN_IMG_H = 80;
 const PREVIEW_MAX_IMG_H = 200;
@@ -83,6 +83,11 @@ const defaultHotkeys = {
   capture: "CommandOrControl+Q",
   record: "CommandOrControl+Shift+Q",
 };
+
+function getStartOnStartup() {
+  const settings = loadSettings();
+  return settings.startOnStartup !== false; // default true
+}
 
 function getHotkeys() {
   const settings = loadSettings();
@@ -158,6 +163,7 @@ let selectedMicId = "default";
 let annotationWindow = null;
 let annotationSourcePreview = null;
 let updateWindow = null;
+let welcomeWindow = null;
 let pinnedDataDir;
 let pinnedManifestPath;
 
@@ -435,6 +441,44 @@ function showToast(message) {
       toastWindow = null;
     }
   }, TOAST_DURATION_MS);
+}
+
+function showWelcome() {
+  const settings = loadSettings();
+  if (settings.welcomeShown) return;
+
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: dw, height: dh } = primaryDisplay.workAreaSize;
+  const w = 360;
+  const h = 410;
+  const x = primaryDisplay.workArea.x + Math.round(dw / 2) - Math.round(w / 2);
+  const y = primaryDisplay.workArea.y + Math.round(dh / 2) - Math.round(h / 2);
+
+  welcomeWindow = new BrowserWindow({
+    width: w,
+    height: h,
+    x,
+    y,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    resizable: false,
+    movable: true,
+    show: false,
+    webPreferences: secureWebPrefs("welcome-preload.js"),
+  });
+
+  welcomeWindow.setAlwaysOnTop(true, "floating");
+  welcomeWindow.loadFile("welcome.html");
+
+  welcomeWindow.once("ready-to-show", () => {
+    welcomeWindow.show();
+  });
+
+  welcomeWindow.on("closed", () => {
+    welcomeWindow = null;
+  });
 }
 
 async function saveToFile(image) {
@@ -962,6 +1006,8 @@ function setupAutoUpdater() {
 }
 
 app.whenReady().then(() => {
+  app.setLoginItemSettings({ openAtLogin: getStartOnStartup() });
+
   configPath = path.join(app.getPath("userData"), "settings.json");
   pinnedDataDir = path.join(app.getPath("userData"), "pinned");
   pinnedManifestPath = path.join(app.getPath("userData"), "pinned-previews.json");
@@ -972,6 +1018,27 @@ app.whenReady().then(() => {
 
   registerHotkeys();
   setupAutoUpdater();
+  showWelcome();
+
+  ipcMain.on("welcome-close", () => {
+    saveSetting("welcomeShown", true);
+    if (welcomeWindow && !welcomeWindow.isDestroyed()) {
+      welcomeWindow.destroy();
+      welcomeWindow = null;
+    }
+  });
+
+  ipcMain.handle("get-welcome-hotkeys", () => {
+    const hk = getHotkeys();
+    return {
+      capture: hotkeyToLabel(hk.capture),
+      record: hotkeyToLabel(hk.record),
+    };
+  });
+
+  ipcMain.on("welcome-open-settings", () => {
+    toggleSettingsWindow();
+  });
 
   ipcMain.on("update-install", () => {
     autoUpdater.quitAndInstall(false, true);
@@ -1145,6 +1212,7 @@ app.whenReady().then(() => {
       saveToDisk: getSaveToDisk(),
       saveFolder: getSaveFolder(),
       hotkeys: hk,
+      startOnStartup: getStartOnStartup(),
     };
   });
 
@@ -1155,6 +1223,7 @@ app.whenReady().then(() => {
         saveToDisk: getSaveToDisk(),
         saveFolder: getSaveFolder(),
         hotkeys: getHotkeys(),
+        startOnStartup: getStartOnStartup(),
       });
     }
   }
@@ -1167,6 +1236,12 @@ app.whenReady().then(() => {
   ipcMain.on("set-save-to-disk", (_event, value) => {
     saveSetting("saveToDisk", value);
     rebuildTrayMenu();
+    sendSettingsUpdate();
+  });
+
+  ipcMain.on("set-start-on-startup", (_event, value) => {
+    saveSetting("startOnStartup", value);
+    app.setLoginItemSettings({ openAtLogin: value });
     sendSettingsUpdate();
   });
 

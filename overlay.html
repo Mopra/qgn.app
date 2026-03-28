@@ -173,35 +173,72 @@
       const captureCtx = captureCanvas.getContext("2d");
       let currentDisplayId = null;
 
+      async function acquireStream(id, displayId) {
+        // Clean up existing video element if present
+        const existing = captureStreams[displayId];
+        if (existing) {
+          existing.srcObject?.getTracks().forEach((t) => t.stop());
+          existing.remove();
+          delete captureStreams[displayId];
+        }
+
+        const video = document.createElement("video");
+        video.style.display = "none";
+        document.body.appendChild(video);
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            mandatory: {
+              chromeMediaSource: "desktop",
+              chromeMediaSourceId: id,
+            },
+          },
+        });
+        video.srcObject = stream;
+        await video.play();
+        captureStreams[displayId] = video;
+
+        // Re-acquire if the track ends (display sleep, resolution change, etc.)
+        stream.getVideoTracks()[0].addEventListener("ended", () => {
+          console.warn(`Track ended for display ${displayId}, re-acquiring`);
+          acquireStream(id, displayId).catch((e) =>
+            console.error(`Failed to re-acquire stream for ${displayId}:`, e)
+          );
+        });
+      }
+
       (async function initStreams() {
         try {
           const sources = await window.qgn.getSources();
           for (const { id, displayId } of sources) {
-            const video = document.createElement("video");
-            video.style.display = "none";
-            document.body.appendChild(video);
-            const stream = await navigator.mediaDevices.getUserMedia({
-              audio: false,
-              video: {
-                mandatory: {
-                  chromeMediaSource: "desktop",
-                  chromeMediaSourceId: id,
-                },
-              },
-            });
-            video.srcObject = stream;
-            await video.play();
-            captureStreams[displayId] = video;
+            await acquireStream(id, displayId);
           }
         } catch (e) {
           console.error("Failed to init capture streams:", e);
         }
       })();
 
-      window.qgn.onActivateCapture(({ displayId }) => {
+      window.qgn.onActivateCapture(async ({ displayId }) => {
         currentDisplayId = displayId;
-        const video = captureStreams[displayId];
+        let video = captureStreams[displayId];
+
+        // If stream is dead or has no video dimensions, try re-acquiring
         if (video) {
+          const track = video.srcObject?.getVideoTracks()[0];
+          if (!track || track.readyState === "ended" || video.videoWidth === 0) {
+            console.warn(`Stale stream for display ${displayId}, re-acquiring`);
+            try {
+              const sources = await window.qgn.getSources();
+              const src = sources.find((s) => s.displayId === displayId);
+              if (src) await acquireStream(src.id, displayId);
+              video = captureStreams[displayId];
+            } catch (e) {
+              console.error("Failed to re-acquire stream:", e);
+            }
+          }
+        }
+
+        if (video && video.videoWidth > 0 && video.videoHeight > 0) {
           captureCanvas.width = video.videoWidth;
           captureCanvas.height = video.videoHeight;
           captureCtx.drawImage(video, 0, 0);

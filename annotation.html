@@ -138,13 +138,13 @@
         z-index: 10;
       }
 
-      /* ── Text size picker ── */
-      .size-picker {
+      /* ── Size pickers (text + redact) ── */
+      .size-picker, .pixel-picker {
         display: none;
         gap: 2px;
       }
-      .size-picker.visible { display: flex; }
-      .size-btn {
+      .size-picker.visible, .pixel-picker.visible { display: flex; }
+      .size-btn, .pixel-btn {
         height: 34px;
         padding: 0 8px;
         border-radius: 8px;
@@ -155,15 +155,92 @@
         font-weight: 600;
         transition: background 0.12s, color 0.12s;
       }
-      .size-btn:hover {
+      .size-btn:hover, .pixel-btn:hover {
         background: rgba(255, 255, 255, 0.08);
         color: rgba(255, 255, 255, 0.9);
       }
-      .size-btn.active {
+      .size-btn.active, .pixel-btn.active {
         background: rgba(255, 255, 255, 0.14);
         border-color: rgba(255, 255, 255, 0.12);
         color: #fff;
       }
+
+      /* ── Shape dropdown ── */
+      .shape-wrapper {
+        position: relative;
+      }
+      .shape-btn {
+        width: 44px;
+        height: 34px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.6);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.12s, color 0.12s;
+        gap: 2px;
+      }
+      .shape-btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .shape-btn.active {
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+      .shape-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+      .shape-caret {
+        width: 0;
+        height: 0;
+        border-left: 3.5px solid transparent;
+        border-right: 3.5px solid transparent;
+        border-top: 4px solid rgba(255, 255, 255, 0.4);
+        margin-left: 2px;
+        flex-shrink: 0;
+      }
+      .shape-dropdown {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-top: 6px;
+        background: rgba(36, 36, 36, 0.98);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        padding: 4px;
+        gap: 2px;
+        z-index: 20;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      }
+      .shape-dropdown.open { display: flex; }
+      .shape-option {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.6);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.12s, color 0.12s;
+      }
+      .shape-option:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .shape-option.active {
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+      .shape-option svg { width: 18px; height: 18px; }
     </style>
   </head>
   <body>
@@ -176,9 +253,26 @@
           <button class="tool-btn" data-tool="arrow" title="Arrow (A)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="10 5 19 5 19 14"/></svg>
           </button>
-          <button class="tool-btn" data-tool="rect" title="Rectangle (R)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-          </button>
+          <div class="shape-wrapper">
+            <button class="shape-btn" id="shapeBtn" title="Shape (S)">
+              <svg id="shapeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+              <span class="shape-caret"></span>
+            </button>
+            <div class="shape-dropdown" id="shapeDropdown">
+              <button class="shape-option active" data-shape="rect" title="Rectangle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+              </button>
+              <button class="shape-option" data-shape="ellipse" title="Ellipse">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9" ry="7"/></svg>
+              </button>
+              <button class="shape-option" data-shape="diamond" title="Diamond">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2, 22 12, 12 22, 2 12"/></svg>
+              </button>
+              <button class="shape-option" data-shape="line" title="Line">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="20" y2="4"/></svg>
+              </button>
+            </div>
+          </div>
           <button class="tool-btn" data-tool="text" title="Text (T)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9.5" y1="20" x2="14.5" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
           </button>
@@ -215,6 +309,12 @@
           <button class="size-btn" data-size="L" style="font-size:15px" title="Large text">L</button>
         </div>
 
+        <div class="pixel-picker" id="pixelPicker">
+          <button class="pixel-btn" data-pixel="S" style="font-size:11px" title="Fine pixels">S</button>
+          <button class="pixel-btn active" data-pixel="M" style="font-size:13px" title="Medium pixels">M</button>
+          <button class="pixel-btn" data-pixel="L" style="font-size:15px" title="Heavy pixels">L</button>
+        </div>
+
         <div class="spacer"></div>
 
         <div class="actions">
@@ -241,31 +341,87 @@
       const img = new Image();
       const MAX_STROKES = 500;
       let tool = "draw";
+      let shapeType = "rect"; // rect, ellipse, diamond, line
       let color = "#ff3b30";
       let strokeBaseWidth = 3;
       let strokes = [];
       let currentStroke = null;
       let isDrawing = false;
       let textSize = "M"; // S, M, L
+      let pixelSize = "M"; // S, M, L
       let calloutCounter = 1;
       const textSizeMap = { S: 14, M: 20, L: 30 }; // base font sizes in display pixels
+      const pixelSizeMap = { S: 6, M: 12, L: 24 }; // pixel block size in display pixels
       const sizePicker = document.getElementById("sizePicker");
+      const pixelPicker = document.getElementById("pixelPicker");
+      const shapeTools = new Set(["rect", "ellipse", "diamond", "line"]);
+
+      /* ── Shape dropdown ── */
+      const shapeBtn = document.getElementById("shapeBtn");
+      const shapeDropdown = document.getElementById("shapeDropdown");
+      const shapeIcon = document.getElementById("shapeIcon");
+
+      const shapeIcons = {
+        rect: '<rect x="3" y="3" width="18" height="18" rx="2"/>',
+        ellipse: '<ellipse cx="12" cy="12" rx="9" ry="7"/>',
+        diamond: '<polygon points="12 2, 22 12, 12 22, 2 12"/>',
+        line: '<line x1="4" y1="20" x2="20" y2="4"/>',
+      };
+
+      shapeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (shapeTools.has(tool)) {
+          shapeDropdown.classList.toggle("open");
+        } else {
+          selectTool(shapeType);
+          shapeDropdown.classList.remove("open");
+        }
+      });
+
+      document.querySelectorAll("[data-shape]").forEach((opt) => {
+        opt.addEventListener("click", (e) => {
+          e.stopPropagation();
+          document.querySelector("[data-shape].active").classList.remove("active");
+          opt.classList.add("active");
+          shapeType = opt.dataset.shape;
+          shapeIcon.innerHTML = shapeIcons[shapeType];
+          shapeDropdown.classList.remove("open");
+          selectTool(shapeType);
+        });
+      });
+
+      document.addEventListener("click", () => {
+        shapeDropdown.classList.remove("open");
+      });
 
       /* ── Tool selection ── */
+      function clearActiveTools() {
+        document.querySelectorAll("[data-tool].active").forEach((b) => b.classList.remove("active"));
+        shapeBtn.classList.remove("active");
+      }
+
       document.querySelectorAll("[data-tool]").forEach((btn) => {
         btn.addEventListener("click", () => {
-          document.querySelector("[data-tool].active").classList.remove("active");
+          clearActiveTools();
           btn.classList.add("active");
           tool = btn.dataset.tool;
           sizePicker.classList.toggle("visible", tool === "text");
+          pixelPicker.classList.toggle("visible", tool === "redact");
+          shapeDropdown.classList.remove("open");
         });
       });
 
       function selectTool(t) {
         tool = t;
-        document.querySelector("[data-tool].active").classList.remove("active");
-        document.querySelector(`[data-tool="${t}"]`).classList.add("active");
+        clearActiveTools();
+        if (shapeTools.has(t)) {
+          shapeBtn.classList.add("active");
+        } else {
+          const btn = document.querySelector(`[data-tool="${t}"]`);
+          if (btn) btn.classList.add("active");
+        }
         sizePicker.classList.toggle("visible", t === "text");
+        pixelPicker.classList.toggle("visible", t === "redact");
       }
 
       /* ── Text size selection ── */
@@ -274,6 +430,15 @@
           document.querySelector("[data-size].active").classList.remove("active");
           btn.classList.add("active");
           textSize = btn.dataset.size;
+        });
+      });
+
+      /* ── Pixel size selection ── */
+      document.querySelectorAll("[data-pixel]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelector("[data-pixel].active").classList.remove("active");
+          btn.classList.add("active");
+          pixelSize = btn.dataset.pixel;
         });
       });
 
@@ -308,7 +473,7 @@
         if ((e.ctrlKey || e.metaKey) && e.key === "z") { e.preventDefault(); undo(); return; }
         if (e.key === "d") selectTool("draw");
         if (e.key === "a") selectTool("arrow");
-        if (e.key === "r") selectTool("rect");
+        if (e.key === "s") selectTool(shapeType);
         if (e.key === "t") selectTool("text");
         if (e.key === "x") selectTool("redact");
         if (e.key === "c") selectTool("callout");
@@ -391,10 +556,10 @@
           currentStroke = { type: "draw", points: [pt], color, width: strokeBaseWidth };
         } else if (tool === "arrow") {
           currentStroke = { type: "arrow", from: pt, to: { ...pt }, color, width: strokeBaseWidth };
-        } else if (tool === "rect") {
-          currentStroke = { type: "rect", from: pt, to: { ...pt }, color, width: strokeBaseWidth };
+        } else if (shapeTools.has(tool)) {
+          currentStroke = { type: tool, from: pt, to: { ...pt }, color, width: strokeBaseWidth };
         } else if (tool === "redact") {
-          currentStroke = { type: "redact", from: pt, to: { ...pt } };
+          currentStroke = { type: "redact", from: pt, to: { ...pt }, pixelSize };
         }
       });
 
@@ -427,7 +592,7 @@
           let dominated;
           if (currentStroke.type === "draw") {
             dominated = currentStroke.points.length >= 2;
-          } else if (currentStroke.type === "redact" || currentStroke.type === "rect" || currentStroke.type === "arrow") {
+          } else if (currentStroke.from && currentStroke.to) {
             dominated = Math.abs(currentStroke.to.x - currentStroke.from.x) > 2 ||
               Math.abs(currentStroke.to.y - currentStroke.from.y) > 2;
           }
@@ -461,8 +626,33 @@
           const y = Math.min(stroke.from.y, stroke.to.y) * sy;
           const w = Math.abs(stroke.to.x - stroke.from.x) * sx;
           const h = Math.abs(stroke.to.y - stroke.from.y) * sy;
-          ctx.fillStyle = "#000000";
-          ctx.fillRect(x, y, w, h);
+          if (w < 1 || h < 1) return;
+
+          // Source region on the original image (always in natural-pixel coords)
+          const imgRX = img.naturalWidth / drawCanvas.width;
+          const imgRY = img.naturalHeight / drawCanvas.height;
+          const srcX = Math.min(stroke.from.x, stroke.to.x) * imgRX;
+          const srcY = Math.min(stroke.from.y, stroke.to.y) * imgRY;
+          const srcW = Math.abs(stroke.to.x - stroke.from.x) * imgRX;
+          const srcH = Math.abs(stroke.to.y - stroke.from.y) * imgRY;
+
+          // Pixel block size scaled to output resolution
+          const block = (pixelSizeMap[stroke.pixelSize] || 12) * sx;
+          const cols = Math.max(1, Math.ceil(w / block));
+          const rows = Math.max(1, Math.ceil(h / block));
+
+          // Sample region from original image at reduced resolution
+          const tmp = document.createElement("canvas");
+          tmp.width = cols;
+          tmp.height = rows;
+          const tmpCtx = tmp.getContext("2d");
+          tmpCtx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, cols, rows);
+
+          // Draw back scaled up with no smoothing for blocky pixels
+          const prevSmoothing = ctx.imageSmoothingEnabled;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(tmp, 0, 0, cols, rows, x, y, w, h);
+          ctx.imageSmoothingEnabled = prevSmoothing;
           return;
         }
 
@@ -511,6 +701,31 @@
           const w = Math.abs(stroke.to.x - stroke.from.x) * sx;
           const h = Math.abs(stroke.to.y - stroke.from.y) * sy;
           ctx.strokeRect(x, y, w, h);
+        } else if (stroke.type === "ellipse") {
+          const cx = ((stroke.from.x + stroke.to.x) / 2) * sx;
+          const cy = ((stroke.from.y + stroke.to.y) / 2) * sy;
+          const rx = (Math.abs(stroke.to.x - stroke.from.x) / 2) * sx;
+          const ry = (Math.abs(stroke.to.y - stroke.from.y) / 2) * sy;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, Math.max(rx, 0.1), Math.max(ry, 0.1), 0, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (stroke.type === "diamond") {
+          const cx = ((stroke.from.x + stroke.to.x) / 2) * sx;
+          const cy = ((stroke.from.y + stroke.to.y) / 2) * sy;
+          const hw = (Math.abs(stroke.to.x - stroke.from.x) / 2) * sx;
+          const hh = (Math.abs(stroke.to.y - stroke.from.y) / 2) * sy;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - hh);
+          ctx.lineTo(cx + hw, cy);
+          ctx.lineTo(cx, cy + hh);
+          ctx.lineTo(cx - hw, cy);
+          ctx.closePath();
+          ctx.stroke();
+        } else if (stroke.type === "line") {
+          ctx.beginPath();
+          ctx.moveTo(stroke.from.x * sx, stroke.from.y * sy);
+          ctx.lineTo(stroke.to.x * sx, stroke.to.y * sy);
+          ctx.stroke();
         }
       }
 

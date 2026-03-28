@@ -311,6 +311,29 @@
           panel.appendChild(changeFolder);
         }
 
+        // Start on startup toggle
+        const startupRow = document.createElement("div");
+        startupRow.className = "item";
+
+        const startupLabel = document.createElement("span");
+        startupLabel.className = "item-label";
+        startupLabel.textContent = "Start on system startup";
+
+        const startupToggle = document.createElement("div");
+        startupToggle.className = "toggle" + (settings.startOnStartup ? " on" : "");
+        const startupKnob = document.createElement("div");
+        startupKnob.className = "toggle-knob";
+        startupToggle.appendChild(startupKnob);
+
+        startupRow.appendChild(startupLabel);
+        startupRow.appendChild(startupToggle);
+        startupRow.addEventListener("click", () => {
+          settings.startOnStartup = !settings.startOnStartup;
+          window.qgnSettings.setStartOnStartup(settings.startOnStartup);
+          render(settings);
+        });
+        panel.appendChild(startupRow);
+
         // Hotkeys section
         const sep2 = document.createElement("div");
         sep2.className = "separator";
