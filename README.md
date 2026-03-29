@@ -2,49 +2,101 @@
   <img src="assets/logos/Logo Transparent BG.png" alt="QGN Logo" width="120" />
 </p>
 
-<h1 align="center">QGN</h1>
+<h1 align="center">QGN — Quick Gen</h1>
 
 <p align="center">
-  Quick screenshot capture and screen recording tool for Windows.
+  Instant screenshot capture and screen recording for Windows.<br />
+  One hotkey. Clipboard-first. No cloud, no account, no subscription.
 </p>
 
 <p align="center">
-  <strong>Source-available, not open source.</strong>
+  <a href="https://qgn.app">Website</a> &middot;
+  <a href="https://github.com/Mopra/qgn.app/releases/latest">Download</a> &middot;
+  <a href="https://github.com/Mopra/qgn.app.website">Website Source</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/license/Mopra/qgn.app?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/github/v/release/Mopra/qgn.app?style=flat-square" alt="Latest Release" />
+  <img src="https://img.shields.io/badge/platform-Windows%2010%2B-blue?style=flat-square" alt="Platform" />
+  <img src="https://img.shields.io/github/downloads/Mopra/qgn.app/total?style=flat-square" alt="Downloads" />
 </p>
 
 ---
 
-## About
+## What is QGN?
 
-QGN is a lightweight desktop tool that lets you capture screen regions instantly with a single hotkey. Screenshots are copied to your clipboard and optionally saved to disk. Floating preview cards let you pin, annotate, and manage your captures without leaving your workflow.
+QGN (Quick Gen) is a lightweight, open-source desktop screenshot tool for Windows. Press `Ctrl+Q`, select a region, and your screenshot is instantly on your clipboard. No sign-ups, no cloud uploads, no monthly fees — just fast screen capture that stays out of your way.
 
-### Features
+**Website:** [qgn.app](https://qgn.app)
 
-- **Instant capture** — Press `Ctrl+Q` to activate a fullscreen overlay, draw a selection, done
-- **Clipboard-first** — Every capture is immediately copied to your clipboard (PNG, JPG, WebP, or base64)
-- **Floating previews** — Captured screenshots appear as pinnable, always-on-top preview cards
-- **Annotation editor** — Draw, mark up, and annotate images before sharing or saving
-- **Screen recording** — Press `Ctrl+Shift+Q` to record screen regions with microphone input
-- **Save to disk** — Optionally auto-save captures to a folder of your choice
-- **System tray** — Runs quietly in the background, accessible from the tray
+## Features
+
+### Capture
+- **Instant hotkey capture** — `Ctrl+Q` activates a fullscreen overlay with crosshair cursor
+- **Pixel-precise region selection** — Click and drag to capture exactly what you need
+- **Real-time dimension display** — See pixel width and height as you drag
+- **Multi-monitor support** — Works across all connected displays seamlessly
+- **Clipboard-first** — Every capture is on your clipboard before the overlay closes
+- **Multiple formats** — Copy as PNG (default), JPG, WebP, or base64 Data URI
+
+### Screen Recording
+- **Region recording** — `Ctrl+Shift+Q` to record any screen region
+- **Microphone input** — Toggle mic and pick your audio device
+- **Format options** — Export as MP4 or WebM
+- **Visual indicator** — Pulsing red border shows what's being recorded
+
+### Floating Previews
+- **Always-on-top cards** — Captures appear as draggable, resizable preview windows
+- **Pin and stack** — Pin previews to keep them between sessions
+- **Persistent pins** — Pinned cards survive app restarts and reboots
+- **Auto-dismiss** — Unpinned previews fade after a configurable timer
+
+### Annotation Editor
+- **Drawing tools** — Freehand drawing with adjustable stroke width
+- **Arrows** — Straight arrows for pointing things out
+- **Shapes** — Rectangles, ellipses, diamonds, and lines
+- **Text** — Add text labels anywhere on the image
+- **Numbered callouts** — Auto-incrementing numbered markers
+- **Redaction** — Blur tool for hiding sensitive information
+- **Colors and strokes** — Six colors, three stroke widths
+- **Keyboard-driven** — Every tool has a single-key shortcut (D, A, S, T, C, X)
+- **Full undo** — `Ctrl+Z` to undo any annotation
+
+### System Integration
+- **System tray** — Runs invisibly in the tray, no window to manage
+- **Auto-save** — Optionally save every capture to a folder with timestamps
+- **Customizable hotkeys** — Rebind capture and recording shortcuts
+- **Start with Windows** — Optional startup with your system
+- **Auto-updates** — Background update checks with one-click install
 
 ## Tech Stack
 
-- **Electron** — Desktop application shell
-- **Sharp** — Image processing and format conversion
-- **Vanilla JS** — No framework overhead
+| Component | Technology |
+|-----------|-----------|
+| Desktop shell | Electron |
+| Image processing | Sharp |
+| UI | Vanilla HTML/CSS/JS |
+| Build system | electron-builder |
+| Auto-updates | electron-updater |
+| Distribution | GitHub Releases (NSIS installer) |
+
+No framework overhead. Vanilla JavaScript throughout. The entire app is a single `main.js` file plus HTML views.
 
 ## Download
 
-Grab the latest installer from the [Releases](https://github.com/Mopra/qgn.app/releases) page — download the `.exe` and run it.
+Grab the latest installer from the [Releases](https://github.com/Mopra/qgn.app/releases/latest) page, or download directly:
+
+**[Download QGN-Setup.exe](https://github.com/Mopra/qgn.app/releases/latest/download/QGN-Setup.exe)** (85 MB, Windows 10+)
 
 ## Development
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18+)
+- [Node.js](https://nodejs.org/) v18+
+- Windows (for building the installer)
 
-### Install & Run
+### Setup
 
 ```bash
 git clone https://github.com/Mopra/qgn.app.git
@@ -59,12 +111,37 @@ npm start
 npm run build
 ```
 
-Produces a Windows installer in the `dist/` directory.
+Produces a Windows NSIS installer in the `dist/` directory.
+
+### Project Structure
+
+```
+qgn.app/
+├── main.js                  # Main Electron process (all app logic)
+├── overlay.html             # Fullscreen capture overlay
+├── preview.html             # Floating preview card
+├── annotation.html          # Annotation editor
+├── settings.html            # Settings panel
+├── record-control.html      # Recording control bar
+├── welcome.html             # First-run welcome screen
+├── *-preload.js             # IPC bridge scripts for each window
+├── assets/                  # Logos and images
+├── icons/                   # App icons (tray, installer)
+├── scripts/                 # Icon generation utilities
+└── .github/workflows/       # CI/CD (release + version bump)
+```
+
+## Related Repositories
+
+| Repository | Description |
+|-----------|-------------|
+| [qgn.app](https://github.com/Mopra/qgn.app) | The desktop application (this repo) |
+| [qgn.app.website](https://github.com/Mopra/qgn.app.website) | Marketing website at [qgn.app](https://qgn.app) |
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-**All Rights Reserved.**
-
-This code is **source-available** for personal, educational, and reference purposes only. You may view and study the code, but you may not modify, distribute, sublicense, or self-host it without explicit written permission.
-
-For licensing inquiries, open an issue or reach out directly.
+[MIT](LICENSE) — free to use, modify, and distribute.

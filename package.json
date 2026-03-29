@@ -2,7 +2,16 @@
   "name": "qgn",
   "productName": "QGN",
   "version": "0.1.8",
-  "description": "Quick screenshot capture tool",
+  "description": "Instant screenshot capture and screen recording tool for Windows. Clipboard-first, floating previews, annotation, multi-monitor. Open source.",
+  "license": "MIT",
+  "homepage": "https://qgn.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mopra/qgn.app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Mopra/qgn.app/issues"
+  },
   "author": "Mopra",
   "main": "main.js",
   "scripts": {

@@ -50,7 +50,10 @@ try {
 // video in other apps (e.g. YouTube goes black under transparent windows)
 app.disableHardwareAcceleration();
 
-let configPath;
+let configPath = path.join(
+  app.getPath("userData"),
+  "settings.json"
+);
 
 function loadSettings() {
   try {
@@ -377,7 +380,7 @@ function showOverlay() {
 function hideOverlay() {
   if (!overlayWindow || overlayWindow.isDestroyed()) return;
   overlayActive = false;
-  overlayWindow.webContents.executeJavaScript("clear()");
+  overlayWindow.webContents.send("overlay-clear");
   overlayWindow.setIgnoreMouseEvents(true);
   overlayWindow.blur();
 }
@@ -690,7 +693,7 @@ async function showOverlayForVideo() {
   const { x, y, width, height } = display.bounds;
   overlayWindow.setBounds({ x, y, width, height });
   overlayWindow.setIgnoreMouseEvents(false);
-  overlayWindow.webContents.executeJavaScript("resetForVideo()");
+  overlayWindow.webContents.send("overlay-reset-video");
   overlayWindow.focus();
 
   // Show control bar in setup mode (audio toggles only) alongside the overlay
@@ -728,8 +731,8 @@ async function showOverlayForVideo() {
     }
     if (isRecording) {
       isRecording = false;
-      if (overlayWindow) {
-        overlayWindow.webContents.executeJavaScript("hideRecordingBorder()");
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
+        overlayWindow.webContents.send("overlay-hide-rec-border");
         overlayWindow.setContentProtection(false);
       }
     }
@@ -775,11 +778,11 @@ function beginVideoRecording(region) {
 
   // Show recording border on overlay
   overlayActive = false;
-  overlayWindow.setIgnoreMouseEvents(true);
-  overlayWindow.setContentProtection(true);
-  overlayWindow.webContents.executeJavaScript(
-    `showRecordingBorder(${JSON.stringify(region)})`
-  );
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.setIgnoreMouseEvents(true);
+    overlayWindow.setContentProtection(true);
+    overlayWindow.webContents.send("overlay-show-rec-border", region);
+  }
 
   // Resize control window for recording phase and tell it to start
   recordingControlWindow.setBounds({
@@ -802,8 +805,8 @@ function beginVideoRecording(region) {
 
 function stopRecordingUI() {
   // Hide the recording border and restore overlay state
-  if (overlayWindow) {
-    overlayWindow.webContents.executeJavaScript("hideRecordingBorder()");
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.webContents.send("overlay-hide-rec-border");
     overlayWindow.setContentProtection(false);
   }
 
@@ -988,9 +991,13 @@ function setupAutoUpdater() {
       updateWindow.webContents.send("update-status", { status: "ready" });
     } else {
       showUpdateToast();
-      updateWindow.webContents.once("did-finish-load", () => {
-        updateWindow.webContents.send("update-status", { status: "ready" });
-      });
+      if (updateWindow && !updateWindow.isDestroyed()) {
+        updateWindow.webContents.once("did-finish-load", () => {
+          if (updateWindow && !updateWindow.isDestroyed()) {
+            updateWindow.webContents.send("update-status", { status: "ready" });
+          }
+        });
+      }
     }
   });
 
@@ -1008,7 +1015,6 @@ function setupAutoUpdater() {
 app.whenReady().then(() => {
   app.setLoginItemSettings({ openAtLogin: getStartOnStartup() });
 
-  configPath = path.join(app.getPath("userData"), "settings.json");
   pinnedDataDir = path.join(app.getPath("userData"), "pinned");
   pinnedManifestPath = path.join(app.getPath("userData"), "pinned-previews.json");
 
@@ -1320,4 +1326,4 @@ app.on("will-quit", () => {
   globalShortcut.unregisterAll();
 });
 
-app.on("window-all-closed", (e) => e.preventDefault());
+app.on("window-all-closed", () => {});

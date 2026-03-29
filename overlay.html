@@ -428,6 +428,12 @@
         hideAllSelection();
       }
 
+      // IPC-driven overlay commands (replaces executeJavaScript calls)
+      window.qgn.onClear(() => clear());
+      window.qgn.onResetForVideo(() => resetForVideo());
+      window.qgn.onShowRecordingBorder((region) => showRecordingBorder(region));
+      window.qgn.onHideRecordingBorder(() => hideRecordingBorder());
+
       // Clean up persistent streams when window unloads
       window.addEventListener("beforeunload", () => {
         for (const [, video] of Object.entries(captureStreams)) {
