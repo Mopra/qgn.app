@@ -2,73 +2,200 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self'"
+    />
     <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body {
-        background: transparent;
-        overflow: hidden;
-        user-select: none;
-        -webkit-app-region: no-drag;
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
       }
-      .toast {
-        display: inline-flex;
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+        user-select: none;
+      }
+
+      .card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
         align-items: center;
-        gap: 10px;
-        padding: 9px 12px 9px 20px;
-        background: rgba(255, 255, 255, 0.12);
+        width: 100%;
+        height: 100%;
+        background: rgba(24, 24, 24, 0.97);
         backdrop-filter: blur(60px) saturate(1.8);
         -webkit-backdrop-filter: blur(60px) saturate(1.8);
-        border: 1px solid rgba(255, 255, 255, 0.25);
-        border-radius: 20px;
-        font: 13px/1 -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
-        font-weight: 500;
-        color: rgba(255, 255, 255, 0.95);
-        letter-spacing: 0.01em;
-        opacity: 0;
-        transform: translateY(6px) scale(0.96);
-        animation: fadeIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-        box-shadow:
-          0 8px 32px rgba(0, 0, 0, 0.25),
-          0 2px 8px rgba(0, 0, 0, 0.15),
-          inset 0 0.5px 0 rgba(255, 255, 255, 0.4);
-      }
-      .btn {
-        padding: 5px 14px;
-        border: 1px solid rgba(255, 255, 255, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.15);
         border-radius: 14px;
-        background: rgba(255, 255, 255, 0.15);
+        padding: 32px 36px 28px;
+        font-family: -apple-system, "SF Pro Text", "Segoe UI", system-ui,
+          sans-serif;
+        -webkit-app-region: drag;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5),
+          0 4px 16px rgba(0, 0, 0, 0.3);
+        opacity: 0;
+        transform: translateY(8px) scale(0.97);
+        animation: cardIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.1s
+          forwards;
+      }
+
+      @keyframes cardIn {
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .close-btn {
+        -webkit-app-region: no-drag;
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        cursor: pointer;
+      }
+
+      .close-btn:hover svg {
+        stroke: rgba(255, 255, 255, 0.8);
+      }
+
+      .close-btn svg {
+        width: 10px;
+        height: 10px;
+        stroke: rgba(255, 255, 255, 0.5);
+        stroke-width: 2;
+        stroke-linecap: round;
+      }
+
+      .icon {
+        width: 40px;
+        height: 40px;
+        margin-bottom: 14px;
+      }
+
+      h1 {
+        font-size: 18px;
+        font-weight: 700;
         color: rgba(255, 255, 255, 0.95);
-        font: 12px/1 -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+        letter-spacing: -0.01em;
+        margin-bottom: 4px;
+      }
+
+      .subtitle {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.45);
+        margin-bottom: 24px;
+        text-align: center;
+      }
+
+      .progress-area {
+        width: 100%;
+        margin-bottom: 24px;
+      }
+
+      .progress-bar-track {
+        width: 100%;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+
+      .progress-bar-fill {
+        height: 100%;
+        width: 0%;
+        background: #af226b;
+        border-radius: 3px;
+        transition: width 0.3s ease;
+      }
+
+      .progress-label {
+        margin-top: 8px;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.4);
+        text-align: center;
+      }
+
+      .btn {
+        -webkit-app-region: no-drag;
+        width: 100%;
+        padding: 10px 0;
+        border: none;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 13px;
         font-weight: 600;
         cursor: pointer;
-        transition: background 0.15s ease;
+        transition: background 0.15s ease, transform 0.1s ease;
+        background: #af226b;
+        color: #fff;
         letter-spacing: 0.01em;
       }
-      .btn:hover { background: rgba(255, 255, 255, 0.25); }
-      .btn-restart { background: rgba(99, 179, 237, 0.3); border-color: rgba(99, 179, 237, 0.4); }
-      .btn-restart:hover { background: rgba(99, 179, 237, 0.45); }
-      .dismiss {
-        padding: 4px 8px;
-        border: none;
-        border-radius: 10px;
-        background: transparent;
-        color: rgba(255, 255, 255, 0.4);
-        font: 12px/1 -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
-        cursor: pointer;
-        transition: color 0.15s ease;
+
+      .btn:hover {
+        background: #921c5a;
       }
-      .dismiss:hover { color: rgba(255, 255, 255, 0.7); }
-      @keyframes fadeIn {
-        to { opacity: 1; transform: translateY(0) scale(1); }
+
+      .btn:active {
+        transform: scale(0.98);
+      }
+
+      .btn:disabled {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.3);
+        cursor: default;
+        transform: none;
+      }
+
+      .hint {
+        -webkit-app-region: no-drag;
+        margin-top: 12px;
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.3);
+      }
+
+      .hint a {
+        color: rgba(255, 255, 255, 0.3);
+        text-decoration: underline;
+        cursor: pointer;
+      }
+
+      .hint a:hover {
+        color: rgba(255, 255, 255, 0.5);
       }
     </style>
   </head>
   <body>
-    <div class="toast">
-      <span id="message">Update available</span>
-      <button class="btn btn-restart" id="action-btn" onclick="window.updateAPI.installUpdate()">Restart</button>
-      <button class="dismiss" onclick="window.updateAPI.dismiss()">Later</button>
+    <div class="card">
+      <div class="close-btn" id="btn-close">
+        <svg viewBox="0 0 14 14" fill="none">
+          <path d="M1 1l12 12M13 1L1 13" />
+        </svg>
+      </div>
+      <img class="icon" src="icons/icon-128.png" alt="QGN" />
+      <h1 id="title">Update available</h1>
+      <p class="subtitle" id="subtitle">A new version of qgn is downloading</p>
+      <div class="progress-area" id="progress-area">
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <p class="progress-label" id="progress-label">Starting download...</p>
+      </div>
+      <button class="btn" id="action-btn" disabled>Downloading...</button>
+      <p class="hint"><a id="link-later">Remind me later</a></p>
     </div>
     <script src="toast-update-renderer.js"></script>
   </body>

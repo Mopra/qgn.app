@@ -15,7 +15,12 @@ const {
 } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const { autoUpdater } = require("electron-updater");
+// Lazy-loaded to avoid crash when running in CLI mode
+let _autoUpdater;
+function getAutoUpdater() {
+  if (!_autoUpdater) _autoUpdater = require("electron-updater").autoUpdater;
+  return _autoUpdater;
+}
 
 // ── Constants ──
 const CARD_WIDTH = 260;
@@ -41,6 +46,10 @@ const secureWebPrefs = (preloadFile, opts = {}) => ({
   sandbox: true,
   ...opts,
 });
+
+// ── CLI mode ──
+// Usage: qgn capture  (takes a fullscreen screenshot, copies to clipboard, saves to disk, exits)
+const cliMode = process.argv.includes("capture");
 
 try {
   require("electron-reloader")(module);
@@ -933,10 +942,10 @@ function showUpdateToast() {
   }
 
   const display = screen.getPrimaryDisplay();
-  const w = 380;
-  const h = 44;
+  const w = 320;
+  const h = 300;
   const x = display.workArea.x + Math.round(display.workArea.width / 2) - Math.round(w / 2);
-  const y = display.workArea.y + display.workArea.height - TOAST_OFFSET_Y;
+  const y = display.workArea.y + Math.round(display.workArea.height / 2) - Math.round(h / 2);
 
   updateWindow = new BrowserWindow({
     width: w,
@@ -948,7 +957,7 @@ function showUpdateToast() {
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
-    movable: false,
+    movable: true,
     focusable: true,
     show: false,
     webPreferences: secureWebPrefs("update-preload.js"),
@@ -959,7 +968,7 @@ function showUpdateToast() {
 
   updateWindow.once("ready-to-show", () => {
     if (updateWindow && !updateWindow.isDestroyed()) {
-      updateWindow.showInactive();
+      updateWindow.show();
     }
   });
 
@@ -969,24 +978,24 @@ function showUpdateToast() {
 }
 
 function setupAutoUpdater() {
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.logger = console;
+  getAutoUpdater().autoDownload = true;
+  getAutoUpdater().autoInstallOnAppQuit = true;
+  getAutoUpdater().logger = console;
 
-  autoUpdater.on("update-available", () => {
+  getAutoUpdater().on("update-available", () => {
     showUpdateToast();
     if (updateWindow && !updateWindow.isDestroyed()) {
       updateWindow.webContents.send("update-status", { status: "downloading", percent: 0 });
     }
   });
 
-  autoUpdater.on("download-progress", (progress) => {
+  getAutoUpdater().on("download-progress", (progress) => {
     if (updateWindow && !updateWindow.isDestroyed()) {
       updateWindow.webContents.send("update-status", { status: "downloading", percent: progress.percent });
     }
   });
 
-  autoUpdater.on("update-downloaded", () => {
+  getAutoUpdater().on("update-downloaded", () => {
     if (updateWindow && !updateWindow.isDestroyed()) {
       updateWindow.webContents.send("update-status", { status: "ready" });
     } else {
@@ -1001,18 +1010,70 @@ function setupAutoUpdater() {
     }
   });
 
-  autoUpdater.on("error", (err) => {
+  getAutoUpdater().on("error", (err) => {
     console.error("Auto-update error:", err);
   });
 
   // Check for updates now and every 4 hours
-  autoUpdater.checkForUpdates().catch(() => {});
+  getAutoUpdater().checkForUpdates().catch(() => {});
   setInterval(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
+    getAutoUpdater().checkForUpdates().catch(() => {});
   }, 4 * 60 * 60 * 1000);
 }
 
+async function cliCapture() {
+  try {
+    const displays = screen.getAllDisplays();
+    // Use primary display for fullscreen capture
+    const primary = screen.getPrimaryDisplay();
+    const { width, height } = primary.size;
+    const scaleFactor = primary.scaleFactor || 1;
+    const thumbW = Math.round(width * scaleFactor);
+    const thumbH = Math.round(height * scaleFactor);
+
+    const sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize: { width: thumbW, height: thumbH },
+    });
+
+    // Match primary display
+    const source =
+      sources.find((s) => s.display_id === String(primary.id)) || sources[0];
+
+    if (!source) {
+      process.stderr.write("Error: no screen source found\n");
+      app.exit(1);
+      return;
+    }
+
+    const image = source.thumbnail;
+    if (image.isEmpty()) {
+      process.stderr.write("Error: captured empty image\n");
+      app.exit(1);
+      return;
+    }
+
+    copyToClipboard(image);
+
+    const savedPath = await saveToFile(image);
+    if (savedPath) {
+      process.stdout.write(savedPath + "\n");
+    } else {
+      process.stdout.write("Copied to clipboard (save to disk disabled or failed)\n");
+    }
+    app.exit(0);
+  } catch (e) {
+    process.stderr.write("Error: " + e.message + "\n");
+    app.exit(1);
+  }
+}
+
 app.whenReady().then(() => {
+  if (cliMode) {
+    cliCapture();
+    return;
+  }
+
   app.setLoginItemSettings({ openAtLogin: getStartOnStartup() });
 
   pinnedDataDir = path.join(app.getPath("userData"), "pinned");
@@ -1047,7 +1108,7 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on("update-install", () => {
-    autoUpdater.quitAndInstall(false, true);
+    getAutoUpdater().quitAndInstall(false, true);
   });
 
   ipcMain.on("update-dismiss", () => {
