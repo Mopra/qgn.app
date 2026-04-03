@@ -983,43 +983,65 @@ function setupAutoUpdater() {
   getAutoUpdater().autoInstallOnAppQuit = true;
   getAutoUpdater().logger = console;
 
+  // Buffer the latest status so it can be replayed after the window loads,
+  // handling the race where download-progress fires before did-finish-load.
+  let pendingStatus = null;
+  let downloadStallTimer = null;
+
+  function sendUpdateStatus(data) {
+    pendingStatus = data;
+    if (updateWindow && !updateWindow.isDestroyed()) {
+      updateWindow.webContents.send("update-status", data);
+    }
+  }
+
+  function onUpdateWindowReady() {
+    if (pendingStatus && updateWindow && !updateWindow.isDestroyed()) {
+      updateWindow.webContents.send("update-status", pendingStatus);
+    }
+  }
+
   getAutoUpdater().on("update-available", () => {
+    pendingStatus = { status: "downloading", percent: 0 };
     showUpdateToast();
     if (updateWindow && !updateWindow.isDestroyed()) {
-      updateWindow.webContents.once("did-finish-load", () => {
-        if (updateWindow && !updateWindow.isDestroyed()) {
-          updateWindow.webContents.send("update-status", { status: "downloading", percent: 0 });
-        }
-      });
+      updateWindow.webContents.once("did-finish-load", onUpdateWindowReady);
     }
+    // Show an error if the download hasn't progressed within 60 seconds
+    downloadStallTimer = setTimeout(() => {
+      if (pendingStatus && pendingStatus.status === "downloading" && pendingStatus.percent < 1) {
+        sendUpdateStatus({ status: "error", message: "Download timed out. Check your connection and try again." });
+      }
+    }, 60000);
   });
 
   getAutoUpdater().on("download-progress", (progress) => {
-    if (updateWindow && !updateWindow.isDestroyed()) {
-      updateWindow.webContents.send("update-status", { status: "downloading", percent: progress.percent });
-    }
+    sendUpdateStatus({ status: "downloading", percent: progress.percent });
   });
 
   getAutoUpdater().on("update-downloaded", () => {
+    if (downloadStallTimer) {
+      clearTimeout(downloadStallTimer);
+      downloadStallTimer = null;
+    }
     if (updateWindow && !updateWindow.isDestroyed()) {
-      updateWindow.webContents.send("update-status", { status: "ready" });
+      sendUpdateStatus({ status: "ready" });
     } else {
+      pendingStatus = { status: "ready" };
       showUpdateToast();
       if (updateWindow && !updateWindow.isDestroyed()) {
-        updateWindow.webContents.once("did-finish-load", () => {
-          if (updateWindow && !updateWindow.isDestroyed()) {
-            updateWindow.webContents.send("update-status", { status: "ready" });
-          }
-        });
+        updateWindow.webContents.once("did-finish-load", onUpdateWindowReady);
       }
     }
   });
 
   getAutoUpdater().on("error", (err) => {
     console.error("Auto-update error:", err);
-    if (updateWindow && !updateWindow.isDestroyed()) {
-      updateWindow.webContents.send("update-status", { status: "error", message: err?.message || "Update failed" });
+    if (downloadStallTimer) {
+      clearTimeout(downloadStallTimer);
+      downloadStallTimer = null;
     }
+    sendUpdateStatus({ status: "error", message: err?.message || "Update failed" });
   });
 
   // Check for updates now and every 4 hours
