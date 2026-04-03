@@ -521,12 +521,13 @@
           input.remove();
         }
 
+        let cancelled = false;
         input.addEventListener("keydown", (e) => {
           if (e.key === "Enter") { e.preventDefault(); commit(); }
-          if (e.key === "Escape") { e.preventDefault(); input.remove(); }
+          if (e.key === "Escape") { e.preventDefault(); cancelled = true; input.remove(); }
           e.stopPropagation();
         });
-        input.addEventListener("blur", commit);
+        input.addEventListener("blur", () => { if (!cancelled) commit(); });
       }
 
       /* ── Pointer events ── */
@@ -771,6 +772,7 @@
         }
 
         out.toBlob((blob) => {
+          if (!blob) return;
           blob.arrayBuffer().then((buf) => {
             window.annotate.save(new Uint8Array(buf));
           });

@@ -392,8 +392,13 @@
             }
           }
 
-          const mp4Supported = MediaRecorder.isTypeSupported("video/mp4;codecs=avc1,mp4a.40.2");
-          const mimeType = mp4Supported ? "video/mp4;codecs=avc1,mp4a.40.2" : "video/webm;codecs=vp9,opus";
+          const hasAudio = recordingStream.getAudioTracks().length > 0;
+          const mp4Supported = hasAudio
+            ? MediaRecorder.isTypeSupported("video/mp4;codecs=avc1,mp4a.40.2")
+            : MediaRecorder.isTypeSupported("video/mp4;codecs=avc1");
+          const mimeType = mp4Supported
+            ? (hasAudio ? "video/mp4;codecs=avc1,mp4a.40.2" : "video/mp4;codecs=avc1")
+            : (hasAudio ? "video/webm;codecs=vp9,opus" : "video/webm;codecs=vp9");
 
           mediaRecorder = new MediaRecorder(recordingStream, {
             mimeType,
@@ -401,6 +406,8 @@
           });
 
           chunks = [];
+          allStreams = [];
+          thumbnailDataUrl = null;
           mediaRecorder.ondataavailable = (e) => {
             if (e.data.size > 0) chunks.push(e.data);
           };

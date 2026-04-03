@@ -240,9 +240,12 @@
           progressFill.style.animationPlayState = "paused";
           progress.style.opacity = "0";
         } else {
-          // Resume countdown from where it left off
+          // Restart countdown fresh on unpin (old animation may have completed while paused)
           progress.style.opacity = "1";
-          progressFill.style.animationPlayState = "running";
+          progressFill.style.animation = "none";
+          // Force reflow to reset the animation
+          void progressFill.offsetWidth;
+          progressFill.style.animation = "shrink 10s linear 0.35s forwards";
         }
       }
 

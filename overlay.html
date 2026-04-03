@@ -199,11 +199,20 @@
         captureStreams[displayId] = video;
 
         // Re-acquire if the track ends (display sleep, resolution change, etc.)
+        let retryCount = 0;
+        const MAX_RETRIES = 3;
         stream.getVideoTracks()[0].addEventListener("ended", () => {
-          console.warn(`Track ended for display ${displayId}, re-acquiring`);
-          acquireStream(id, displayId).catch((e) =>
-            console.error(`Failed to re-acquire stream for ${displayId}:`, e)
-          );
+          if (retryCount >= MAX_RETRIES) {
+            console.error(`Max retries reached for display ${displayId}, giving up`);
+            return;
+          }
+          retryCount++;
+          console.warn(`Track ended for display ${displayId}, re-acquiring (attempt ${retryCount}/${MAX_RETRIES})`);
+          setTimeout(() => {
+            acquireStream(id, displayId).catch((e) =>
+              console.error(`Failed to re-acquire stream for ${displayId}:`, e)
+            );
+          }, 1000 * retryCount);
         });
       }
 
@@ -261,6 +270,7 @@
           captureCanvas, sx, sy, sw, sh, 0, 0, sw, sh
         );
         crop.toBlob((blob) => {
+          if (!blob) return;
           blob.arrayBuffer().then((buf) => {
             window.qgn.capture(new Uint8Array(buf));
           });

@@ -36,5 +36,12 @@ window.updateAPI.onUpdateStatus((data) => {
     progressLabel.textContent = "Download complete";
     actionBtn.textContent = "Update & relaunch";
     actionBtn.disabled = false;
+  } else if (data.status === "error") {
+    titleEl.textContent = "Update failed";
+    subtitleEl.textContent = data.message || "Something went wrong";
+    progressArea.style.display = "none";
+    actionBtn.textContent = "Dismiss";
+    actionBtn.disabled = false;
+    actionBtn.onclick = () => window.updateAPI.dismiss();
   }
 });

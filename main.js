@@ -443,15 +443,16 @@ function showToast(message) {
   const toastFile = message === "saved" ? "toast-saved.html" : "toast.html";
   toastWindow.loadFile(toastFile);
 
-  toastWindow.once("ready-to-show", () => {
-    toastWindow.showInactive();
+  const thisToast = toastWindow;
+  thisToast.once("ready-to-show", () => {
+    if (!thisToast.isDestroyed()) thisToast.showInactive();
   });
 
   setTimeout(() => {
-    if (toastWindow && !toastWindow.isDestroyed()) {
-      toastWindow.destroy();
-      toastWindow = null;
+    if (!thisToast.isDestroyed()) {
+      thisToast.destroy();
     }
+    if (toastWindow === thisToast) toastWindow = null;
   }, TOAST_DURATION_MS);
 }
 
@@ -485,7 +486,7 @@ function showWelcome() {
   welcomeWindow.loadFile("welcome.html");
 
   welcomeWindow.once("ready-to-show", () => {
-    welcomeWindow.show();
+    if (welcomeWindow && !welcomeWindow.isDestroyed()) welcomeWindow.show();
   });
 
   welcomeWindow.on("closed", () => {
@@ -985,7 +986,11 @@ function setupAutoUpdater() {
   getAutoUpdater().on("update-available", () => {
     showUpdateToast();
     if (updateWindow && !updateWindow.isDestroyed()) {
-      updateWindow.webContents.send("update-status", { status: "downloading", percent: 0 });
+      updateWindow.webContents.once("did-finish-load", () => {
+        if (updateWindow && !updateWindow.isDestroyed()) {
+          updateWindow.webContents.send("update-status", { status: "downloading", percent: 0 });
+        }
+      });
     }
   });
 
@@ -1012,6 +1017,9 @@ function setupAutoUpdater() {
 
   getAutoUpdater().on("error", (err) => {
     console.error("Auto-update error:", err);
+    if (updateWindow && !updateWindow.isDestroyed()) {
+      updateWindow.webContents.send("update-status", { status: "error", message: err?.message || "Update failed" });
+    }
   });
 
   // Check for updates now and every 4 hours
@@ -1023,7 +1031,6 @@ function setupAutoUpdater() {
 
 async function cliCapture() {
   try {
-    const displays = screen.getAllDisplays();
     // Use primary display for fullscreen capture
     const primary = screen.getPrimaryDisplay();
     const { width, height } = primary.size;
@@ -1247,17 +1254,25 @@ app.whenReady().then(() => {
     copyToClipboard(image);
 
     if (annotationSourcePreview) {
-      if (annotationSourcePreview.filePath) {
-        fs.writeFileSync(annotationSourcePreview.filePath, image.toPNG());
+      try {
+        if (annotationSourcePreview.filePath) {
+          fs.writeFileSync(annotationSourcePreview.filePath, image.toPNG());
+        }
+      } catch (e) {
+        console.error("Failed to write annotated file:", e);
       }
       annotationSourcePreview.pngBuffer = pngBuffer;
 
       // Update persisted pinned image if stored in pinnedDataDir
       if (annotationSourcePreview.pinnedImagePath && annotationSourcePreview.pinnedImagePath !== annotationSourcePreview.filePath) {
-        fs.writeFileSync(annotationSourcePreview.pinnedImagePath, image.toPNG());
+        try {
+          fs.writeFileSync(annotationSourcePreview.pinnedImagePath, image.toPNG());
+        } catch (e) {
+          console.error("Failed to write pinned image:", e);
+        }
       }
 
-      if (!annotationSourcePreview.window.isDestroyed()) {
+      if (annotationSourcePreview.window && !annotationSourcePreview.window.isDestroyed()) {
         const imageDataUrl = `data:image/png;base64,${Buffer.from(pngBuffer).toString("base64")}`;
         annotationSourcePreview.window.webContents.send("update-preview", { imageDataUrl });
       }
@@ -1316,6 +1331,14 @@ app.whenReady().then(() => {
     // Validate action and accelerator before registering
     if (!["capture", "record"].includes(action)) return;
     if (typeof accelerator !== "string" || accelerator.length > 100) return;
+    // Validate the accelerator by attempting to register it first
+    try {
+      globalShortcut.register(accelerator, () => {});
+      globalShortcut.unregister(accelerator);
+    } catch (e) {
+      console.error("Invalid accelerator:", accelerator, e);
+      return;
+    }
     saveSetting(`hotkey_${action}`, accelerator);
     registerHotkeys();
     rebuildTrayMenu();

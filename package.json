@@ -34,10 +34,11 @@
       "record-preload.js",
       "settings-preload.js",
       "update-preload.js",
+      "welcome-preload.js",
+      "toast-update-renderer.js",
       "*.html",
       "icons/**/*",
-      "assets/**/*",
-      "node_modules/**/*"
+      "assets/**/*"
     ],
     "win": {
       "target": "nsis",
@@ -58,12 +59,12 @@
     }
   },
   "dependencies": {
-    "electron-updater": "^6.8.3",
-    "sharp": "^0.34.5"
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "electron": "^35.0.0",
     "electron-builder": "^25.1.8",
-    "electron-reloader": "^1.2.3"
+    "electron-reloader": "^1.2.3",
+    "sharp": "^0.34.5"
   }
 }

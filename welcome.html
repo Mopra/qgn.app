@@ -261,13 +261,23 @@
     </div>
 
     <script>
+      function displayAccelerator(accel) {
+        return accel
+          .replace("CommandOrControl", "Ctrl")
+          .replace("CmdOrCtrl", "Ctrl")
+          .replace("Control", "Ctrl")
+          .replace("Command", "Ctrl")
+          .replace(/\+/g, " + ");
+      }
+
       (async () => {
         const hotkeys = await window.welcomeAPI.getHotkeys();
         if (hotkeys.capture)
           document.getElementById("hotkey-capture").textContent =
-            hotkeys.capture;
+            displayAccelerator(hotkeys.capture);
         if (hotkeys.record)
-          document.getElementById("hotkey-record").textContent = hotkeys.record;
+          document.getElementById("hotkey-record").textContent =
+            displayAccelerator(hotkeys.record);
       })();
 
       document.getElementById("btn-go").addEventListener("click", () => {

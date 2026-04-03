@@ -20,6 +20,11 @@ while ((match = rectRegex.exec(svg)) !== null) {
   });
 }
 
+if (rects.length === 0) {
+  console.error("No rects found in SVG — aborting to avoid overwriting source file.");
+  process.exit(1);
+}
+
 // Find bounding box of all content rects
 let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 for (const r of rects) {
