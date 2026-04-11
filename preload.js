@@ -6,13 +6,25 @@ contextBridge.exposeInMainWorld("qgn", {
     ipcRenderer.send("start-video-recording", region),
   cancel: () => ipcRenderer.send("cancel"),
   getSources: () => ipcRenderer.invoke("get-sources"),
-  onActivateCapture: (cb) =>
-    ipcRenderer.on("activate-capture", (_e, data) => cb(data)),
-  onClear: (cb) => ipcRenderer.on("overlay-clear", () => cb()),
-  onResetForVideo: (cb) => ipcRenderer.on("overlay-reset-video", () => cb()),
-  onShowRecordingBorder: (cb) =>
-    ipcRenderer.on("overlay-show-rec-border", (_e, data) => cb(data)),
-  onHideRecordingBorder: (cb) =>
-    ipcRenderer.on("overlay-hide-rec-border", () => cb()),
+  onActivateCapture: (cb) => {
+    ipcRenderer.removeAllListeners("activate-capture");
+    ipcRenderer.on("activate-capture", (_e, data) => cb(data));
+  },
+  onClear: (cb) => {
+    ipcRenderer.removeAllListeners("overlay-clear");
+    ipcRenderer.on("overlay-clear", () => cb());
+  },
+  onResetForVideo: (cb) => {
+    ipcRenderer.removeAllListeners("overlay-reset-video");
+    ipcRenderer.on("overlay-reset-video", () => cb());
+  },
+  onShowRecordingBorder: (cb) => {
+    ipcRenderer.removeAllListeners("overlay-show-rec-border");
+    ipcRenderer.on("overlay-show-rec-border", (_e, data) => cb(data));
+  },
+  onHideRecordingBorder: (cb) => {
+    ipcRenderer.removeAllListeners("overlay-hide-rec-border");
+    ipcRenderer.on("overlay-hide-rec-border", () => cb());
+  },
   closeMicDropdown: () => ipcRenderer.send("close-mic-dropdown"),
 });

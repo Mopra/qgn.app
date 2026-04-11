@@ -51,9 +51,11 @@ const secureWebPrefs = (preloadFile, opts = {}) => ({
 // Usage: qgn capture  (takes a fullscreen screenshot, copies to clipboard, saves to disk, exits)
 const cliMode = process.argv.includes("capture");
 
-try {
-  require("electron-reloader")(module);
-} catch (_) {}
+if (!app.isPackaged) {
+  try {
+    require("electron-reloader")(module);
+  } catch (_) {}
+}
 
 // Software rendering avoids GPU compositing conflicts with hardware-accelerated
 // video in other apps (e.g. YouTube goes black under transparent windows)
@@ -75,7 +77,9 @@ function loadSettings() {
 function saveSetting(key, value) {
   const settings = loadSettings();
   settings[key] = value;
-  fs.writeFileSync(configPath, JSON.stringify(settings, null, 2));
+  const tmp = configPath + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(settings, null, 2));
+  fs.renameSync(tmp, configPath);
 }
 
 function getSaveFolder() {
@@ -178,6 +182,16 @@ let updateWindow = null;
 let welcomeWindow = null;
 let pinnedDataDir;
 let pinnedManifestPath;
+let isQuitting = false;
+
+// Debounce timers for preview bounds persistence
+const boundsDebounceTimers = new Map();
+function clearBoundsDebounce(winId) {
+  if (boundsDebounceTimers.has(winId)) {
+    clearTimeout(boundsDebounceTimers.get(winId));
+    boundsDebounceTimers.delete(winId);
+  }
+}
 
 function loadPinnedManifest() {
   try {
@@ -309,9 +323,10 @@ function restorePinnedPreviews() {
     });
 
     win.on("closed", () => {
+      clearBoundsDebounce(win.id);
       const idx = previewWindows.indexOf(entry);
       if (idx !== -1) previewWindows.splice(idx, 1);
-      if (!app.isQuitting) unpersistPin(entry);
+      if (!isQuitting) unpersistPin(entry);
       repositionPreviews();
     });
 
@@ -349,7 +364,7 @@ function createOverlay() {
   // Prevent the OS or Electron from destroying this long-lived window,
   // but allow it during app quit so the app can actually exit.
   overlayWindow.on("close", (e) => {
-    if (!app.isQuitting) e.preventDefault();
+    if (!isQuitting) e.preventDefault();
   });
 
   // Show window once so subsequent activations don't trigger the
@@ -577,9 +592,10 @@ function showPreview(pngBuffer, imgSize, filePath, isVideo = false) {
   });
 
   win.on("closed", () => {
+    clearBoundsDebounce(win.id);
     const idx = previewWindows.indexOf(entry);
     if (idx !== -1) previewWindows.splice(idx, 1);
-    if (!app.isQuitting) unpersistPin(entry);
+    if (!isQuitting) unpersistPin(entry);
     repositionPreviews();
   });
 }
@@ -661,7 +677,7 @@ let videoSourceId = null;
 let videoScaleFactor = 1;
 
 async function showOverlayForVideo() {
-  if (!overlayWindow || !overlayReady) return;
+  if (!overlayWindow || overlayWindow.isDestroyed() || !overlayReady) return;
 
   // If already recording, stop the recording
   if (isRecording) {
@@ -749,15 +765,15 @@ async function showOverlayForVideo() {
   });
 
   // Pre-create dropdown window (hidden) so it opens instantly
-  const bounds = recordingControlWindow.getBounds();
+  // Position off-screen initially; repositioned in open-mic-dropdown handler
   const dropW = 260;
   const dropH = 200;
 
   micDropdownWindow = new BrowserWindow({
     width: dropW,
     height: dropH,
-    x: bounds.x + bounds.width - dropW,
-    y: bounds.y + bounds.height + 4,
+    x: -1000,
+    y: -1000,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -1112,6 +1128,19 @@ app.whenReady().then(() => {
   createTray();
   restorePinnedPreviews();
 
+  // Keep previewDisplay up-to-date when monitors change
+  screen.on("display-metrics-changed", () => {
+    previewDisplay = screen.getPrimaryDisplay().workArea;
+    repositionPreviews();
+  });
+  screen.on("display-added", () => {
+    previewDisplay = screen.getPrimaryDisplay().workArea;
+  });
+  screen.on("display-removed", () => {
+    previewDisplay = screen.getPrimaryDisplay().workArea;
+    repositionPreviews();
+  });
+
   registerHotkeys();
   setupAutoUpdater();
   showWelcome();
@@ -1238,9 +1267,11 @@ app.whenReady().then(() => {
     return win && !win.isDestroyed() ? win.getBounds() : null;
   });
 
-  // Debounce manifest writes during preview drag/resize
-  const boundsDebounceTimers = new Map();
   ipcMain.on("preview-set-bounds", (event, bounds) => {
+    const { x, y, width, height } = bounds || {};
+    if (typeof x !== "number" || typeof y !== "number" ||
+        typeof width !== "number" || typeof height !== "number") return;
+    if (width < 50 || height < 50) return;
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win && !win.isDestroyed()) {
       win.setBounds(bounds);
@@ -1277,8 +1308,10 @@ app.whenReady().then(() => {
 
     if (annotationSourcePreview) {
       try {
-        if (annotationSourcePreview.filePath) {
-          fs.writeFileSync(annotationSourcePreview.filePath, image.toPNG());
+        if (annotationSourcePreview.filePath && !annotationSourcePreview.isVideo) {
+          const tmp = annotationSourcePreview.filePath + ".tmp";
+          fs.writeFileSync(tmp, image.toPNG());
+          fs.renameSync(tmp, annotationSourcePreview.filePath);
         }
       } catch (e) {
         console.error("Failed to write annotated file:", e);
@@ -1333,8 +1366,11 @@ app.whenReady().then(() => {
   }
 
   ipcMain.on("set-copy-format", (_event, fmt) => {
+    const VALID_FORMATS = ["png", "jpg", "webp", "base64"];
+    if (!VALID_FORMATS.includes(fmt)) return;
     saveSetting("copyFormat", fmt);
     rebuildTrayMenu();
+    sendSettingsUpdate();
   });
 
   ipcMain.on("set-save-to-disk", (_event, value) => {
@@ -1411,7 +1447,7 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
-  app.isQuitting = true;
+  isQuitting = true;  // module-level flag
   // Save final bounds for pinned previews (covers drag-to-move which bypasses set-bounds)
   try {
     const manifest = loadPinnedManifest();

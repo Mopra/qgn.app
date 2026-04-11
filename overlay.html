@@ -270,7 +270,11 @@
           captureCanvas, sx, sy, sw, sh, 0, 0, sw, sh
         );
         crop.toBlob((blob) => {
-          if (!blob) return;
+          if (!blob) {
+            console.error("Capture failed: toBlob returned null");
+            window.qgn.cancel();
+            return;
+          }
           blob.arrayBuffer().then((buf) => {
             window.qgn.capture(new Uint8Array(buf));
           });

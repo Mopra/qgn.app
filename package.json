@@ -40,6 +40,7 @@
       "icons/**/*",
       "assets/**/*"
     ],
+    "asarUnpack": ["node_modules/sharp/**/*"],
     "win": {
       "target": "nsis",
       "icon": "icons/icon.ico"
@@ -59,12 +60,12 @@
     }
   },
   "dependencies": {
-    "electron-updater": "^6.8.3"
+    "electron-updater": "^6.8.3",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "electron": "^35.0.0",
     "electron-builder": "^25.1.8",
-    "electron-reloader": "^1.2.3",
-    "sharp": "^0.34.5"
+    "electron-reloader": "^1.2.3"
   }
 }

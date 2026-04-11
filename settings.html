@@ -204,9 +204,6 @@
         e.preventDefault();
         e.stopPropagation();
 
-        const acc = keyToAccelerator(e);
-        if (!acc) return;
-
         if (e.key === "Escape") {
           recordingBtn.classList.remove("recording");
           recordingBtn.textContent = displayAccelerator(
@@ -216,6 +213,9 @@
           recordingBtn = null;
           return;
         }
+
+        const acc = keyToAccelerator(e);
+        if (!acc) return;
 
         currentSettings.hotkeys[recordingAction] = acc;
         window.qgnSettings.setHotkey(recordingAction, acc);

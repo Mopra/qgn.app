@@ -307,6 +307,10 @@
         setupPhase.classList.remove("active");
         recordingPhase.classList.add("active");
 
+        // Clean up any leftover streams from a previous recording
+        allStreams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
+        allStreams = [];
+
         try {
           // Get screen video stream
           const stream = await navigator.mediaDevices.getUserMedia({
@@ -406,7 +410,6 @@
           });
 
           chunks = [];
-          allStreams = [];
           thumbnailDataUrl = null;
           mediaRecorder.ondataavailable = (e) => {
             if (e.data.size > 0) chunks.push(e.data);

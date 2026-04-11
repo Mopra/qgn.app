@@ -1,8 +1,14 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("preview", {
-  onShow: (cb) => ipcRenderer.on("show-preview", (_e, data) => cb(data)),
-  onUpdate: (cb) => ipcRenderer.on("update-preview", (_e, data) => cb(data)),
+  onShow: (cb) => {
+    ipcRenderer.removeAllListeners("show-preview");
+    ipcRenderer.on("show-preview", (_e, data) => cb(data));
+  },
+  onUpdate: (cb) => {
+    ipcRenderer.removeAllListeners("update-preview");
+    ipcRenderer.on("update-preview", (_e, data) => cb(data));
+  },
   close: () => ipcRenderer.send("close-preview"),
   openFile: () => ipcRenderer.send("preview-open-file"),
   edit: () => ipcRenderer.send("preview-edit"),
