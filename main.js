@@ -756,6 +756,7 @@ async function showOverlayForVideo() {
   });
 
   recordingControlWindow.on("closed", () => {
+    globalShortcut.unregister("Escape");
     recordingControlWindow = null;
     if (micDropdownWindow && !micDropdownWindow.isDestroyed()) {
       micDropdownWindow.destroy();
@@ -808,6 +809,18 @@ function beginVideoRecording(region) {
 
   isRecording = true;
 
+  // While recording, Escape stops and saves (same as the Stop button / record hotkey).
+  // Registered here, after area selection, so Escape still cancels during selection.
+  try {
+    globalShortcut.register("Escape", () => {
+      if (recordingControlWindow && !recordingControlWindow.isDestroyed()) {
+        recordingControlWindow.webContents.send("stop-recording");
+      }
+    });
+  } catch (e) {
+    console.error("Failed to register Escape-to-stop:", e);
+  }
+
   // Show recording border on overlay
   overlayActive = false;
   if (overlayWindow && !overlayWindow.isDestroyed()) {
@@ -837,6 +850,8 @@ function beginVideoRecording(region) {
 }
 
 function stopRecordingUI() {
+  globalShortcut.unregister("Escape");
+
   // Hide the recording border and restore overlay state
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     overlayWindow.webContents.send("overlay-hide-rec-border");
