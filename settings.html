@@ -156,6 +156,10 @@
     <script>
       const panel = document.getElementById("panel");
       const formats = ["png", "jpg", "webp", "base64"];
+      const recordFormats = [
+        { key: "mp4", label: "MP4 Video" },
+        { key: "gif", label: "GIF" },
+      ];
 
       const hotkeyActions = [
         { key: "capture", label: "Capture" },
@@ -267,6 +271,39 @@
         const sep = document.createElement("div");
         sep.className = "separator";
         panel.appendChild(sep);
+
+        // Record format section
+        const recLabel = document.createElement("div");
+        recLabel.className = "section-label";
+        recLabel.textContent = "Record format";
+        panel.appendChild(recLabel);
+
+        recordFormats.forEach(({ key, label }) => {
+          const item = document.createElement("div");
+          item.className =
+            "item" + (settings.recordFormat === key ? " selected" : "");
+
+          const check = document.createElement("span");
+          check.className = "check";
+          check.textContent = settings.recordFormat === key ? "✓" : "";
+
+          const fmtItemLabel = document.createElement("span");
+          fmtItemLabel.className = "item-label";
+          fmtItemLabel.textContent = label;
+
+          item.appendChild(check);
+          item.appendChild(fmtItemLabel);
+          item.addEventListener("click", () => {
+            settings.recordFormat = key;
+            window.qgnSettings.setRecordFormat(key);
+            render(settings);
+          });
+          panel.appendChild(item);
+        });
+
+        const recSep = document.createElement("div");
+        recSep.className = "separator";
+        panel.appendChild(recSep);
 
         // Save to disk toggle
         const saveRow = document.createElement("div");

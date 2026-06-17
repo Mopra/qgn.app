@@ -95,6 +95,10 @@ function getCopyFormat() {
   return loadSettings().copyFormat || "png";
 }
 
+function getRecordFormat() {
+  return loadSettings().recordFormat === "gif" ? "gif" : "mp4";
+}
+
 const defaultHotkeys = {
   capture: "CommandOrControl+Q",
   record: "CommandOrControl+Shift+Q",
@@ -738,7 +742,9 @@ async function showOverlayForVideo() {
     webPreferences: secureWebPrefs("record-preload.js", { backgroundThrottling: false }),
   });
 
-  recordingControlWindow.loadFile("record-control.html");
+  recordingControlWindow.loadFile("record-control.html", {
+    search: `format=${getRecordFormat()}`,
+  });
   recordingControlWindow.setAlwaysOnTop(true, "screen-saver");
   recordingControlWindow.setContentProtection(true);
 
@@ -818,6 +824,7 @@ function beginVideoRecording(region) {
 
   recordingControlWindow.webContents.send("start-recording", {
     sourceId: videoSourceId,
+    recordFormat: getRecordFormat(),
     region: {
       x: Math.round(region.x * videoScaleFactor),
       y: Math.round(region.y * videoScaleFactor),
@@ -848,7 +855,7 @@ function saveRecording(data, thumbnailDataUrl, format) {
     const folder = getSaveFolder();
     fs.mkdirSync(folder, { recursive: true });
 
-    const ext = format === "mp4" ? "mp4" : "webm";
+    const ext = format === "mp4" || format === "gif" ? format : "webm";
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const filePath = path.join(folder, `qgn-${timestamp}.${ext}`);
     fs.writeFileSync(filePath, Buffer.from(data));
@@ -905,7 +912,7 @@ function toggleSettingsWindow() {
 
   const trayBounds = tray.getBounds();
   const winW = 260;
-  const winH = 370;
+  const winH = 450;
 
   // Position above the tray icon (Windows taskbar is typically at the bottom)
   const x = Math.round(trayBounds.x + trayBounds.width / 2 - winW / 2);
@@ -1346,6 +1353,7 @@ app.whenReady().then(() => {
     const hk = getHotkeys();
     return {
       copyFormat: getCopyFormat(),
+      recordFormat: getRecordFormat(),
       saveToDisk: getSaveToDisk(),
       saveFolder: getSaveFolder(),
       hotkeys: hk,
@@ -1357,6 +1365,7 @@ app.whenReady().then(() => {
     if (settingsWindow && !settingsWindow.isDestroyed()) {
       settingsWindow.webContents.send("settings-updated", {
         copyFormat: getCopyFormat(),
+        recordFormat: getRecordFormat(),
         saveToDisk: getSaveToDisk(),
         saveFolder: getSaveFolder(),
         hotkeys: getHotkeys(),
@@ -1370,6 +1379,13 @@ app.whenReady().then(() => {
     if (!VALID_FORMATS.includes(fmt)) return;
     saveSetting("copyFormat", fmt);
     rebuildTrayMenu();
+    sendSettingsUpdate();
+  });
+
+  ipcMain.on("set-record-format", (_event, fmt) => {
+    const VALID_FORMATS = ["mp4", "gif"];
+    if (!VALID_FORMATS.includes(fmt)) return;
+    saveSetting("recordFormat", fmt);
     sendSettingsUpdate();
   });
 
