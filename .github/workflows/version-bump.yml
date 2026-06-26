@@ -1,4 +1,4 @@
-name: Auto Version Bump & Release
+name: Check & (opt-in) Release
 
 on:
   push:
@@ -12,9 +12,27 @@ permissions:
   contents: write
 
 jobs:
-  bump-and-release:
+  # Runs on every push to main: fast syntax/JSON validation so a broken main.js
+  # can never ship.
+  check:
     runs-on: windows-latest
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run checks (JS + HTML + package.json)
+        run: node scripts/check.js
+
+  # Only releases when the commit message contains [release]. This keeps routine
+  # pushes (docs, refactors) from shipping a build to every auto-updating user.
+  bump-and-release:
+    needs: check
+    runs-on: windows-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]') && contains(github.event.head_commit.message, '[release]')"
 
     steps:
       - uses: actions/checkout@v4

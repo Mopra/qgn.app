@@ -16,7 +16,8 @@
   "main": "main.js",
   "scripts": {
     "start": "node -e \"delete process.env.ELECTRON_RUN_AS_NODE; require('child_process').spawn(require('electron'), ['.'], {stdio:'inherit',detached:true}).unref(); process.exit()\"",
-    "build": "electron-builder --win",
+    "check": "node scripts/check.js",
+    "build": "node scripts/check.js && electron-builder --win",
     "generate-icons": "node scripts/generate-icons.js"
   },
   "build": {
@@ -28,13 +29,7 @@
     "files": [
       "main.js",
       "preload.js",
-      "annotation-preload.js",
-      "dropdown-preload.js",
-      "preview-preload.js",
-      "record-preload.js",
-      "settings-preload.js",
-      "update-preload.js",
-      "welcome-preload.js",
+      "*-preload.js",
       "toast-update-renderer.js",
       "*.html",
       "icons/**/*",

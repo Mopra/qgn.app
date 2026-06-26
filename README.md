@@ -35,22 +35,27 @@ QGN (Quick Gen) is a lightweight, open-source desktop screenshot tool for Window
 ### Capture
 - **Instant hotkey capture** — `Ctrl+Q` activates a fullscreen overlay with crosshair cursor
 - **Pixel-precise region selection** — Click and drag to capture exactly what you need
+- **Full-screen capture** — Press `Space` on the overlay (or use the tray menu) to grab the whole display
 - **Real-time dimension display** — See pixel width and height as you drag
 - **Multi-monitor support** — Works across all connected displays seamlessly
 - **Clipboard-first** — Every capture is on your clipboard before the overlay closes
-- **Multiple formats** — Copy as PNG (default), JPG, WebP, or base64 Data URI
+- **Multiple formats** — Copy as PNG (default), JPG, WebP, or base64 Data URI (with adjustable JPG/WebP quality)
 
 ### Screen Recording
 - **Region recording** — `Ctrl+Shift+Q` to record any screen region
 - **Microphone input** — Toggle mic and pick your audio device
+- **Pause & resume** — Pause mid-recording and pick up where you left off
+- **Optional countdown** — A 3-2-1 pre-roll before recording starts (configurable)
 - **Format options** — Export as MP4 or WebM
 - **Visual indicator** — Pulsing red border shows what's being recorded
 
 ### Floating Previews
 - **Always-on-top cards** — Captures appear as draggable, resizable preview windows
+- **Drag out to any app** — Drag the thumbnail straight into Slack, email, or an editor
+- **Copy again** — Re-copy a capture to the clipboard with one click
 - **Pin and stack** — Pin previews to keep them between sessions
 - **Persistent pins** — Pinned cards survive app restarts and reboots
-- **Auto-dismiss** — Unpinned previews fade after a configurable timer
+- **Auto-dismiss** — Unpinned previews fade after a configurable timer (5s/10s/20s/Never)
 
 ### Annotation Editor
 - **Drawing tools** — Freehand drawing with adjustable stroke width
@@ -58,15 +63,19 @@ QGN (Quick Gen) is a lightweight, open-source desktop screenshot tool for Window
 - **Shapes** — Rectangles, ellipses, diamonds, and lines
 - **Text** — Add text labels anywhere on the image
 - **Numbered callouts** — Auto-incrementing numbered markers
-- **Redaction** — Blur tool for hiding sensitive information
+- **Redaction** — Solid block (default, unrecoverable) or pixelate, for hiding sensitive information
+- **Crop** — Trim the capture down to what matters
+- **Cursor** — Drop a mouse pointer anywhere (captures are cursor-free, so you place it deliberately)
 - **Colors and strokes** — Six colors, three stroke widths
-- **Keyboard-driven** — Every tool has a single-key shortcut (D, A, S, T, C, X)
-- **Full undo** — `Ctrl+Z` to undo any annotation
+- **Keyboard-driven** — Every tool has a single-key shortcut (D, A, S, T, C, X, P, R)
+- **Undo & redo** — `Ctrl+Z` / `Ctrl+Y` across every annotation
 
 ### System Integration
 - **System tray** — Runs invisibly in the tray, no window to manage
+- **Annotate clipboard image** — Open the editor on whatever image is on your clipboard
 - **Auto-save** — Optionally save every capture to a folder with timestamps
-- **Customizable hotkeys** — Rebind capture and recording shortcuts
+- **Single instance** — Launching again triggers a capture instead of a second copy
+- **Customizable hotkeys** — Rebind capture and recording shortcuts (with conflict detection and reset)
 - **Start with Windows** — Optional startup with your system
 - **Auto-updates** — Background update checks with one-click install
 

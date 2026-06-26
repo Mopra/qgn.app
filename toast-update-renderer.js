@@ -13,6 +13,10 @@ document.getElementById("link-later").addEventListener("click", () => {
   window.updateAPI.dismiss();
 });
 
+document.getElementById("link-star").addEventListener("click", () => {
+  window.updateAPI.star();
+});
+
 actionBtn.addEventListener("click", () => {
   if (!actionBtn.disabled) {
     window.updateAPI.installUpdate();

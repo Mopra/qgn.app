@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("qgnRecord", {
     ipcRenderer.on("stop-recording", () => callback());
   },
   saveRecording: (buffer, thumbnail, format) => ipcRenderer.send("save-recording", buffer, thumbnail, format),
+  reportError: (message) => ipcRenderer.send("recording-error", message),
+  cancel: () => ipcRenderer.send("cancel"),
   openMicDropdown: () => ipcRenderer.send("open-mic-dropdown"),
   onMicDeviceSelected: (callback) => {
     ipcRenderer.removeAllListeners("mic-device-selected");

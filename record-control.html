@@ -244,11 +244,14 @@
         </div>
       </div>
 
-      <!-- Recording phase: dot + timer + Stop -->
+      <!-- Recording phase: dot + timer + Pause + Stop -->
       <div class="phase" id="recordingPhase">
         <div class="dot"></div>
         <span class="timer" id="timer">0:00</span>
         <div class="sep"></div>
+        <button class="toggle-btn" id="pauseBtn" title="Pause">
+          <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+        </button>
         <button class="stop-btn" id="stopBtn">Stop</button>
       </div>
     </div>
@@ -262,11 +265,15 @@
       const recordingPhase = document.getElementById("recordingPhase");
       const timerEl = document.getElementById("timer");
       const stopBtn = document.getElementById("stopBtn");
+      const pauseBtn = document.getElementById("pauseBtn");
       const audioBtn = document.getElementById("audioBtn");
       const micBtn = document.getElementById("micBtn");
       const micChevron = document.getElementById("micChevron");
       const video = document.getElementById("video");
       const canvas = document.getElementById("canvas");
+
+      const PAUSE_ICON = '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+      const PLAY_ICON = '<svg viewBox="0 0 24 24"><polygon points="7,4 20,12 7,20"/></svg>';
 
       let audioEnabled = false;
       let micEnabled = false;
@@ -278,6 +285,12 @@
       let animFrame = null;
       let allStreams = [];
       let thumbnailDataUrl = null;
+      let paused = false;
+      let pausedAccum = 0; // ms spent paused, excluded from the timer
+      let pauseStart = 0;
+      let countingDown = false;
+      let countdownTimer = null;
+      let recordingAborted = false;
 
       audioBtn.addEventListener("click", () => {
         audioEnabled = !audioEnabled;
@@ -301,36 +314,84 @@
 
       // Main sends start-recording when user finishes area selection
       window.qgnRecord.onStartRecording(async (data) => {
-        const { sourceId, region } = data;
+        const { sourceId, region, display, countdown } = data;
 
         // Switch to recording UI
         setupPhase.classList.remove("active");
         recordingPhase.classList.add("active");
+
+        // Reset pause state for this session
+        paused = false;
+        pausedAccum = 0;
+        pauseBtn.classList.remove("active");
+        pauseBtn.title = "Pause";
+        pauseBtn.innerHTML = PAUSE_ICON;
+
+        // Optional 3-2-1 pre-roll countdown (shown in the timer slot).
+        if (countdown && countdown > 0) {
+          const proceeded = await runCountdown(countdown);
+          if (!proceeded) return; // aborted before recording started
+        }
+        timerEl.textContent = "0:00";
 
         // Clean up any leftover streams from a previous recording
         allStreams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
         allStreams = [];
 
         try {
-          // Get screen video stream
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: {
-              mandatory: {
-                chromeMediaSource: "desktop",
-                chromeMediaSourceId: sourceId,
-              },
-            },
-          });
+          // Get screen video stream. Without explicit width/height constraints
+          // Chromium downscales the desktop capture to a low default (~720p),
+          // which makes the cropped region blurry. Pin the capture to the
+          // display's true physical resolution for a sharp 1:1 source.
+          const videoMandatory = {
+            chromeMediaSource: "desktop",
+            chromeMediaSourceId: sourceId,
+            maxFrameRate: 30,
+          };
+          if (display && display.width > 0 && display.height > 0) {
+            videoMandatory.minWidth = display.width;
+            videoMandatory.maxWidth = display.width;
+            videoMandatory.minHeight = display.height;
+            videoMandatory.maxHeight = display.height;
+          }
+          let stream;
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: { mandatory: videoMandatory },
+            });
+          } catch (constraintErr) {
+            // Some fractional display scale factors make the exact resolution
+            // unsatisfiable. Fall back to an unconstrained capture so recording
+            // still works (just at Chromium's default resolution).
+            console.warn(
+              "Full-res capture constraints rejected, falling back:",
+              constraintErr.message
+            );
+            delete videoMandatory.minWidth;
+            delete videoMandatory.maxWidth;
+            delete videoMandatory.minHeight;
+            delete videoMandatory.maxHeight;
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: { mandatory: videoMandatory },
+            });
+          }
           allStreams.push(stream);
 
           video.srcObject = stream;
           await video.play();
 
-          // Set up canvas for cropping
+          // Set up canvas for cropping. Use an opaque context (alpha: false):
+          // a canvas with an alpha plane fed through captureStream() into the
+          // hardware H.264 encoder produces the intermittent green/color tint.
           canvas.width = region.width;
           canvas.height = region.height;
-          const ctx = canvas.getContext("2d");
+          const ctx = canvas.getContext("2d", { alpha: false });
+          // Paint an opaque background so the very first encoded frame is never
+          // an uninitialized (green) buffer.
+          ctx.fillStyle = "#000";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
 
           function drawFrame() {
             ctx.drawImage(
@@ -360,6 +421,7 @@
           if (audioEnabled || micEnabled) {
             audioCtx = new AudioContext();
             mixedDest = audioCtx.createMediaStreamDestination();
+            let connectedSources = 0;
 
             if (audioEnabled) {
               try {
@@ -373,8 +435,8 @@
                 });
                 sysStream.getVideoTracks().forEach((t) => t.stop());
                 allStreams.push(sysStream);
-                const sysSource = audioCtx.createMediaStreamSource(sysStream);
-                sysSource.connect(mixedDest);
+                audioCtx.createMediaStreamSource(sysStream).connect(mixedDest);
+                connectedSources++;
               } catch (e) { console.warn("System audio unavailable:", e.message); }
             }
 
@@ -385,14 +447,19 @@
                   : { audio: true, video: false };
                 const micStream = await navigator.mediaDevices.getUserMedia(micConstraints);
                 allStreams.push(micStream);
-                const micSource = audioCtx.createMediaStreamSource(micStream);
-                micSource.connect(mixedDest);
+                audioCtx.createMediaStreamSource(micStream).connect(mixedDest);
+                connectedSources++;
               } catch (e) { console.warn("Microphone unavailable:", e.message); }
             }
 
+            // Only attach audio if a source actually connected — otherwise the
+            // MediaStreamDestination would add a silent track.
             const mixedTracks = mixedDest.stream.getAudioTracks();
-            if (mixedTracks.length > 0) {
+            if (connectedSources > 0 && mixedTracks.length > 0) {
               recordingStream.addTrack(mixedTracks[0]);
+            } else {
+              audioCtx.close();
+              audioCtx = null;
             }
           }
 
@@ -404,9 +471,17 @@
             ? (hasAudio ? "video/mp4;codecs=avc1,mp4a.40.2" : "video/mp4;codecs=avc1")
             : (hasAudio ? "video/webm;codecs=vp9,opus" : "video/webm;codecs=vp9");
 
+          // Scale bitrate to the region size (~0.15 bits/pixel/frame at 30fps),
+          // clamped to a sane range. A fixed 5 Mbps looked soft on text-heavy
+          // captures once the source is full resolution.
+          const videoBitsPerSecond = Math.min(
+            50000000,
+            Math.max(8000000, Math.round(region.width * region.height * 30 * 0.15))
+          );
+
           mediaRecorder = new MediaRecorder(recordingStream, {
             mimeType,
-            videoBitsPerSecond: 5000000,
+            videoBitsPerSecond,
           });
 
           chunks = [];
@@ -436,25 +511,79 @@
           timerInterval = setInterval(updateTimer, 1000);
         } catch (err) {
           console.error("Recording failed:", err);
+          window.qgnRecord.reportError("Couldn't start recording");
+          window.qgnRecord.cancel();
         }
       });
 
       function updateTimer() {
-        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const elapsed = Math.floor((Date.now() - startTime - pausedAccum) / 1000);
         const m = Math.floor(elapsed / 60);
         const s = String(elapsed % 60).padStart(2, "0");
         timerEl.textContent = `${m}:${s}`;
       }
 
-      window.qgnRecord.onStopRecording(() => {
-        stopRecording();
+      window.qgnRecord.onStopRecording(() => stopRecording());
+      stopBtn.addEventListener("click", () => stopRecording());
+
+      pauseBtn.addEventListener("click", () => {
+        if (!mediaRecorder || mediaRecorder.state === "inactive") return;
+        if (!paused) {
+          mediaRecorder.pause();
+          paused = true;
+          pauseStart = Date.now();
+          clearInterval(timerInterval);
+          pauseBtn.classList.add("active");
+          pauseBtn.title = "Resume";
+          pauseBtn.innerHTML = PLAY_ICON;
+        } else {
+          mediaRecorder.resume();
+          paused = false;
+          pausedAccum += Date.now() - pauseStart;
+          timerInterval = setInterval(updateTimer, 1000);
+          pauseBtn.classList.remove("active");
+          pauseBtn.title = "Pause";
+          pauseBtn.innerHTML = PAUSE_ICON;
+        }
       });
 
-      stopBtn.addEventListener("click", () => {
-        stopRecording();
-      });
+      // Pre-roll countdown shown in the timer slot. Resolves false if aborted.
+      function runCountdown(seconds) {
+        return new Promise((resolve) => {
+          recordingAborted = false;
+          countingDown = true;
+          let n = seconds;
+          timerEl.textContent = String(n);
+          countdownTimer = setInterval(() => {
+            if (recordingAborted) {
+              clearInterval(countdownTimer);
+              countdownTimer = null;
+              countingDown = false;
+              resolve(false);
+              return;
+            }
+            n -= 1;
+            if (n <= 0) {
+              clearInterval(countdownTimer);
+              countdownTimer = null;
+              countingDown = false;
+              resolve(true);
+            } else {
+              timerEl.textContent = String(n);
+            }
+          }, 1000);
+        });
+      }
 
       function stopRecording() {
+        // Abort cleanly if still in the pre-roll countdown.
+        if (countingDown) {
+          recordingAborted = true;
+          if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+          countingDown = false;
+          window.qgnRecord.cancel();
+          return;
+        }
         clearInterval(timerInterval);
         // Capture thumbnail from the current canvas frame before stopping
         try {

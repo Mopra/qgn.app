@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run checks (JS + HTML + package.json)
+        run: node scripts/check.js
+
       - name: Build and publish
         run: npx electron-builder --win --publish always
         env:

@@ -139,11 +139,11 @@
       }
 
       /* ── Size pickers (text + redact) ── */
-      .size-picker, .pixel-picker {
+      .size-picker, .pixel-picker, .redact-style {
         display: none;
         gap: 2px;
       }
-      .size-picker.visible, .pixel-picker.visible { display: flex; }
+      .size-picker.visible, .pixel-picker.visible, .redact-style.visible { display: flex; }
       .size-btn, .pixel-btn {
         height: 34px;
         padding: 0 8px;
@@ -282,12 +282,21 @@
           <button class="tool-btn" data-tool="callout" title="Callout (C)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><text x="12" y="16" text-anchor="middle" fill="currentColor" stroke="none" font-size="12" font-weight="700">1</text></svg>
           </button>
+          <button class="tool-btn" data-tool="cursor" title="Cursor (P)">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M5 2 L5 19 L8.7 15.3 L11 20.4 L13.1 19.5 L10.7 14.5 L15.5 14.5 Z"/></svg>
+          </button>
+          <button class="tool-btn" data-tool="crop" title="Crop (R)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>
+          </button>
         </div>
 
         <div class="sep"></div>
 
         <button class="tool-btn" id="undoBtn" title="Undo (Ctrl+Z)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+        </button>
+        <button class="tool-btn" id="redoBtn" title="Redo (Ctrl+Y)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.13-9.36L23 10"/></svg>
         </button>
 
         <div class="sep"></div>
@@ -307,6 +316,11 @@
           <button class="size-btn" data-size="S" style="font-size:11px" title="Small text">S</button>
           <button class="size-btn active" data-size="M" style="font-size:13px" title="Medium text">M</button>
           <button class="size-btn" data-size="L" style="font-size:15px" title="Large text">L</button>
+        </div>
+
+        <div class="redact-style" id="redactStyle">
+          <button class="size-btn active" data-redact="solid" style="font-size:12px" title="Solid block (safest)">Block</button>
+          <button class="size-btn" data-redact="pixelate" style="font-size:12px" title="Pixelate">Pixel</button>
         </div>
 
         <div class="pixel-picker" id="pixelPicker">
@@ -345,15 +359,18 @@
       let color = "#ff3b30";
       let strokeBaseWidth = 3;
       let strokes = [];
+      let redoStack = [];
       let currentStroke = null;
       let isDrawing = false;
       let textSize = "M"; // S, M, L
       let pixelSize = "M"; // S, M, L
+      let redactStyle = "solid"; // solid | pixelate
       let calloutCounter = 1;
       const textSizeMap = { S: 14, M: 20, L: 30 }; // base font sizes in display pixels
       const pixelSizeMap = { S: 6, M: 12, L: 24 }; // pixel block size in display pixels
       const sizePicker = document.getElementById("sizePicker");
       const pixelPicker = document.getElementById("pixelPicker");
+      const redactStyleGroup = document.getElementById("redactStyle");
       const shapeTools = new Set(["rect", "ellipse", "diamond", "line"]);
 
       /* ── Shape dropdown ── */
@@ -400,13 +417,19 @@
         shapeBtn.classList.remove("active");
       }
 
+      // Show only the option picker(s) relevant to the active tool.
+      function updateOptionPickers() {
+        sizePicker.classList.toggle("visible", tool === "text");
+        redactStyleGroup.classList.toggle("visible", tool === "redact");
+        pixelPicker.classList.toggle("visible", tool === "redact" && redactStyle === "pixelate");
+      }
+
       document.querySelectorAll("[data-tool]").forEach((btn) => {
         btn.addEventListener("click", () => {
           clearActiveTools();
           btn.classList.add("active");
           tool = btn.dataset.tool;
-          sizePicker.classList.toggle("visible", tool === "text");
-          pixelPicker.classList.toggle("visible", tool === "redact");
+          updateOptionPickers();
           shapeDropdown.classList.remove("open");
         });
       });
@@ -420,8 +443,7 @@
           const btn = document.querySelector(`[data-tool="${t}"]`);
           if (btn) btn.classList.add("active");
         }
-        sizePicker.classList.toggle("visible", t === "text");
-        pixelPicker.classList.toggle("visible", t === "redact");
+        updateOptionPickers();
       }
 
       /* ── Text size selection ── */
@@ -442,6 +464,16 @@
         });
       });
 
+      /* ── Redaction style selection (solid block vs pixelate) ── */
+      document.querySelectorAll("[data-redact]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelector("[data-redact].active").classList.remove("active");
+          btn.classList.add("active");
+          redactStyle = btn.dataset.redact;
+          updateOptionPickers();
+        });
+      });
+
       /* ── Color selection ── */
       document.querySelectorAll(".swatch").forEach((sw) => {
         sw.addEventListener("click", () => {
@@ -451,15 +483,29 @@
         });
       });
 
-      /* ── Undo ── */
+      /* ── Undo / Redo ── */
+      // All newly committed strokes go through addStroke so the redo stack is
+      // invalidated whenever the user draws something new after undoing.
+      function addStroke(s) {
+        strokes.push(s);
+        redoStack = [];
+      }
       function undo() {
-        if (strokes.length > 0) {
-          const removed = strokes.pop();
-          if (removed.type === "callout") calloutCounter--;
-          renderDrawCanvas();
-        }
+        if (strokes.length === 0) return;
+        const removed = strokes.pop();
+        if (removed.type === "callout") calloutCounter--;
+        redoStack.push(removed);
+        renderDrawCanvas();
+      }
+      function redo() {
+        if (redoStack.length === 0) return;
+        const restored = redoStack.pop();
+        if (restored.type === "callout") calloutCounter++;
+        strokes.push(restored);
+        renderDrawCanvas();
       }
       document.getElementById("undoBtn").addEventListener("click", undo);
+      document.getElementById("redoBtn").addEventListener("click", redo);
 
       /* ── Cancel / Done ── */
       document.getElementById("cancelBtn").addEventListener("click", () => window.annotate.cancel());
@@ -470,13 +516,20 @@
         // Don't intercept keys when typing in text input
         if (e.target.classList.contains("text-input")) return;
         if (e.key === "Escape") { window.annotate.cancel(); return; }
-        if ((e.ctrlKey || e.metaKey) && e.key === "z") { e.preventDefault(); undo(); return; }
+        const mod = e.ctrlKey || e.metaKey;
+        // Redo: Ctrl+Y or Ctrl+Shift+Z
+        if (mod && (e.key === "y" || e.key === "Y" || ((e.key === "z" || e.key === "Z") && e.shiftKey))) {
+          e.preventDefault(); redo(); return;
+        }
+        if (mod && (e.key === "z" || e.key === "Z")) { e.preventDefault(); undo(); return; }
         if (e.key === "d") selectTool("draw");
         if (e.key === "a") selectTool("arrow");
         if (e.key === "s") selectTool(shapeType);
         if (e.key === "t") selectTool("text");
         if (e.key === "x") selectTool("redact");
         if (e.key === "c") selectTool("callout");
+        if (e.key === "p") selectTool("cursor");
+        if (e.key === "r") selectTool("crop");
       });
 
       /* ── Canvas coordinates (display-pixel space) ── */
@@ -509,7 +562,7 @@
         function commit() {
           const text = input.value.trim();
           if (text) {
-            strokes.push({
+            addStroke({
               type: "text",
               text,
               pos: { x: parseFloat(input.dataset.ptX), y: parseFloat(input.dataset.ptY) },
@@ -540,13 +593,22 @@
         }
 
         if (tool === "callout") {
-          strokes.push({
+          addStroke({
             type: "callout",
             pos: pt,
             number: calloutCounter++,
             color,
           });
           renderDrawCanvas();
+          return;
+        }
+
+        if (tool === "cursor") {
+          // Click to drop a cursor; its tip (hotspot) sits at the click point.
+          if (strokes.length < MAX_STROKES) {
+            addStroke({ type: "cursor", pos: pt });
+            renderDrawCanvas();
+          }
           return;
         }
 
@@ -560,7 +622,9 @@
         } else if (shapeTools.has(tool)) {
           currentStroke = { type: tool, from: pt, to: { ...pt }, color, width: strokeBaseWidth };
         } else if (tool === "redact") {
-          currentStroke = { type: "redact", from: pt, to: { ...pt }, pixelSize };
+          currentStroke = { type: "redact", from: pt, to: { ...pt }, pixelSize, style: redactStyle };
+        } else if (tool === "crop") {
+          currentStroke = { type: "cropsel", from: pt, to: { ...pt } };
         }
       });
 
@@ -588,6 +652,14 @@
       });
 
       drawCanvas.addEventListener("pointerup", () => {
+        // Crop commits immediately (it's not a saved stroke).
+        if (currentStroke && currentStroke.type === "cropsel") {
+          const sel = currentStroke;
+          currentStroke = null;
+          isDrawing = false;
+          performCrop(sel);
+          return;
+        }
         if (currentStroke) {
           // Only save strokes with meaningful content
           let dominated;
@@ -597,7 +669,7 @@
             dominated = Math.abs(currentStroke.to.x - currentStroke.from.x) > 2 ||
               Math.abs(currentStroke.to.y - currentStroke.from.y) > 2;
           }
-          if (dominated && strokes.length < MAX_STROKES) strokes.push(currentStroke);
+          if (dominated && strokes.length < MAX_STROKES) addStroke(currentStroke);
           currentStroke = null;
         }
         isDrawing = false;
@@ -613,6 +685,26 @@
       }
 
       function drawStrokeOnCtx(ctx, stroke, sx, sy) {
+        if (stroke.type === "cropsel") {
+          // Live crop selection: dim outside + dashed border (never saved).
+          const x = Math.min(stroke.from.x, stroke.to.x) * sx;
+          const y = Math.min(stroke.from.y, stroke.to.y) * sy;
+          const w = Math.abs(stroke.to.x - stroke.from.x) * sx;
+          const h = Math.abs(stroke.to.y - stroke.from.y) * sy;
+          ctx.save();
+          ctx.fillStyle = "rgba(0,0,0,0.45)";
+          ctx.fillRect(0, 0, drawCanvas.width, y);
+          ctx.fillRect(0, y + h, drawCanvas.width, drawCanvas.height - (y + h));
+          ctx.fillRect(0, y, x, h);
+          ctx.fillRect(x + w, y, drawCanvas.width - (x + w), h);
+          ctx.strokeStyle = "rgba(255,255,255,0.95)";
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([5, 4]);
+          ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+          ctx.restore();
+          return;
+        }
+
         if (stroke.type === "text") {
           const fontSize = textSizeMap[stroke.size] * sx;
           ctx.font = `600 ${fontSize}px -apple-system, "Segoe UI", system-ui, sans-serif`;
@@ -628,6 +720,13 @@
           const w = Math.abs(stroke.to.x - stroke.from.x) * sx;
           const h = Math.abs(stroke.to.y - stroke.from.y) * sy;
           if (w < 1 || h < 1) return;
+
+          // Solid block: opaque and unrecoverable (the safe default).
+          if (stroke.style === "solid") {
+            ctx.fillStyle = "#000";
+            ctx.fillRect(x, y, w, h);
+            return;
+          }
 
           // Source region on the original image (always in natural-pixel coords)
           const imgRX = img.naturalWidth / drawCanvas.width;
@@ -674,6 +773,11 @@
           ctx.textBaseline = "middle";
           ctx.fillText(String(stroke.number), cx, cy);
           ctx.textAlign = "start"; // reset
+          return;
+        }
+
+        if (stroke.type === "cursor") {
+          drawCursor(ctx, stroke.pos.x * sx, stroke.pos.y * sy, sx);
           return;
         }
 
@@ -756,6 +860,41 @@
         ctx.fill();
       }
 
+      /* ── Cursor: classic arrow pointer, hotspot at the tip ── */
+      // Perimeter of a standard arrow cursor in unit space (tip at 0,0).
+      const CURSOR_POINTS = [
+        [0, 0], [0, 17], [3.7, 13.3], [6.0, 18.4],
+        [8.1, 17.5], [5.7, 12.5], [10.5, 12.5],
+      ];
+      const CURSOR_UNIT = 1.4; // display px per unit (~26px tall on canvas)
+
+      function drawCursor(ctx, x, y, scale) {
+        const u = CURSOR_UNIT * scale;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.beginPath();
+        ctx.moveTo(CURSOR_POINTS[0][0] * u, CURSOR_POINTS[0][1] * u);
+        for (let i = 1; i < CURSOR_POINTS.length; i++) {
+          ctx.lineTo(CURSOR_POINTS[i][0] * u, CURSOR_POINTS[i][1] * u);
+        }
+        ctx.closePath();
+        // White body with a soft shadow so it reads on any background…
+        ctx.shadowColor = "rgba(0,0,0,0.4)";
+        ctx.shadowBlur = 4 * scale;
+        ctx.shadowOffsetY = 1 * scale;
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        // …and a crisp dark outline (no shadow on the stroke).
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.lineWidth = 1.6 * scale;
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = "#000000";
+        ctx.stroke();
+        ctx.restore();
+      }
+
       /* ── Save: composite at full image resolution ── */
       function save() {
         const out = document.createElement("canvas");
@@ -777,6 +916,53 @@
             window.annotate.save(new Uint8Array(buf));
           });
         }, "image/png");
+      }
+
+      /* ── Crop: flatten annotations into the image, then crop to selection ──
+         Cropping commits prior annotations (baked into the new base image) and
+         resets the stroke/redo state. */
+      function performCrop(sel) {
+        const x0 = Math.min(sel.from.x, sel.to.x);
+        const y0 = Math.min(sel.from.y, sel.to.y);
+        const w0 = Math.abs(sel.to.x - sel.from.x);
+        const h0 = Math.abs(sel.to.y - sel.from.y);
+        if (w0 < 8 || h0 < 8) { renderDrawCanvas(); return; } // ignore tiny selections
+
+        const sx = img.naturalWidth / drawCanvas.width;
+        const sy = img.naturalHeight / drawCanvas.height;
+
+        // Flatten base image + annotations at natural resolution.
+        const flat = document.createElement("canvas");
+        flat.width = img.naturalWidth;
+        flat.height = img.naturalHeight;
+        const fctx = flat.getContext("2d");
+        fctx.drawImage(img, 0, 0);
+        for (const s of strokes) drawStrokeOnCtx(fctx, s, sx, sy);
+
+        // Crop region in natural-pixel coords, clamped to the image.
+        let nx = Math.round(x0 * sx);
+        let ny = Math.round(y0 * sy);
+        let nw = Math.round(w0 * sx);
+        let nh = Math.round(h0 * sy);
+        nx = Math.max(0, Math.min(nx, flat.width - 1));
+        ny = Math.max(0, Math.min(ny, flat.height - 1));
+        nw = Math.max(1, Math.min(nw, flat.width - nx));
+        nh = Math.max(1, Math.min(nh, flat.height - ny));
+
+        const cropped = document.createElement("canvas");
+        cropped.width = nw;
+        cropped.height = nh;
+        cropped.getContext("2d").drawImage(flat, nx, ny, nw, nh, 0, 0, nw, nh);
+        const dataUrl = cropped.toDataURL("image/png");
+
+        // Reset annotation state; the cropped result becomes the new base image.
+        strokes = [];
+        redoStack = [];
+        currentStroke = null;
+        calloutCounter = 1;
+
+        img.onload = () => { initCanvas(); selectTool("draw"); };
+        img.src = dataUrl;
       }
 
       /* ── Init canvas to fit available space ── */

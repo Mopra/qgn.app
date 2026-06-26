@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self'"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self'"
     />
     <style>
       * {
@@ -34,7 +34,7 @@
         -webkit-backdrop-filter: blur(60px) saturate(1.8);
         border: 1px solid rgba(255, 255, 255, 0.15);
         border-radius: 14px;
-        padding: 32px 36px 28px;
+        padding: 40px 36px 32px;
         font-family: -apple-system, "SF Pro Text", "Segoe UI", system-ui,
           sans-serif;
         -webkit-app-region: drag;
@@ -83,56 +83,34 @@
       .icon {
         width: 40px;
         height: 40px;
-        margin-bottom: 14px;
+        margin-bottom: 16px;
       }
 
       h1 {
-        font-size: 18px;
+        font-size: 20px;
         font-weight: 700;
         color: rgba(255, 255, 255, 0.95);
         letter-spacing: -0.01em;
-        margin-bottom: 4px;
+        margin-bottom: 8px;
+        text-align: center;
       }
 
       .subtitle {
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.45);
-        margin-bottom: 24px;
+        line-height: 1.5;
+        color: rgba(255, 255, 255, 0.5);
         text-align: center;
-      }
-
-      .progress-area {
-        width: 100%;
-        margin-bottom: 24px;
-      }
-
-      .progress-bar-track {
-        width: 100%;
-        height: 6px;
-        background: rgba(255, 255, 255, 0.08);
-        border-radius: 3px;
-        overflow: hidden;
-      }
-
-      .progress-bar-fill {
-        height: 100%;
-        width: 0%;
-        background: #af226b;
-        border-radius: 3px;
-        transition: width 0.3s ease;
-      }
-
-      .progress-label {
-        margin-top: 8px;
-        font-size: 12px;
-        color: rgba(255, 255, 255, 0.4);
-        text-align: center;
+        margin-bottom: 28px;
       }
 
       .btn {
         -webkit-app-region: no-drag;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
         width: 100%;
-        padding: 10px 0;
+        padding: 11px 0;
         border: none;
         border-radius: 8px;
         font-family: inherit;
@@ -153,33 +131,28 @@
         transform: scale(0.98);
       }
 
-      .btn:disabled {
-        background: rgba(255, 255, 255, 0.08);
-        color: rgba(255, 255, 255, 0.3);
-        cursor: default;
-        transform: none;
+      .btn svg {
+        width: 16px;
+        height: 16px;
+        fill: #fff;
       }
 
       .hint {
         -webkit-app-region: no-drag;
-        margin-top: 12px;
+        margin-top: 14px;
         font-size: 11px;
         color: rgba(255, 255, 255, 0.3);
       }
 
       .hint a {
-        color: rgba(255, 255, 255, 0.3);
-        text-decoration: underline;
+        color: rgba(255, 255, 255, 0.4);
+        text-decoration: none;
         cursor: pointer;
       }
 
       .hint a:hover {
-        color: rgba(255, 255, 255, 0.5);
-      }
-
-      .hint-sep {
-        margin: 0 4px;
-        color: rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.6);
+        text-decoration: underline;
       }
     </style>
   </head>
@@ -191,21 +164,33 @@
         </svg>
       </div>
       <img class="icon" src="icons/icon-128.png" alt="QGN" />
-      <h1 id="title">Update available</h1>
-      <p class="subtitle" id="subtitle">A new version of qgn is downloading</p>
-      <div class="progress-area" id="progress-area">
-        <div class="progress-bar-track">
-          <div class="progress-bar-fill" id="progress-fill"></div>
-        </div>
-        <p class="progress-label" id="progress-label">Starting download...</p>
-      </div>
-      <button class="btn" id="action-btn" disabled>Downloading...</button>
-      <p class="hint">
-        <a id="link-later">Remind me later</a>
-        <span class="hint-sep">&middot;</span>
-        <a id="link-star">&#9733; Star on GitHub</a>
+      <h1>Enjoying QGN?</h1>
+      <p class="subtitle">
+        It&rsquo;s free and open source. A quick star on GitHub helps more
+        people discover it &mdash; and it really makes my day.
       </p>
+
+      <button class="btn" id="btn-star">
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M12 2.5l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.77l-5.8 3.05 1.11-6.46-4.7-4.58 6.49-.94L12 2.5z"
+          />
+        </svg>
+        Star on GitHub
+      </button>
+      <p class="hint"><a id="link-later">Maybe later</a></p>
     </div>
-    <script src="toast-update-renderer.js"></script>
+
+    <script>
+      document.getElementById("btn-star").addEventListener("click", () => {
+        window.starAPI.star();
+      });
+      document.getElementById("btn-close").addEventListener("click", () => {
+        window.starAPI.dismiss();
+      });
+      document.getElementById("link-later").addEventListener("click", () => {
+        window.starAPI.dismiss();
+      });
+    </script>
   </body>
 </html>

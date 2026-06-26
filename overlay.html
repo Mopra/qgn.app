@@ -167,118 +167,22 @@
       const $instr = document.getElementById("instr");
       const $rec   = document.getElementById("rec-border");
 
-      // --- Persistent screen capture streams ---
-      const captureStreams = {};
-      const captureCanvas = document.createElement("canvas");
-      const captureCtx = captureCanvas.getContext("2d");
-      let currentDisplayId = null;
-
-      async function acquireStream(id, displayId) {
-        // Clean up existing video element if present
-        const existing = captureStreams[displayId];
-        if (existing) {
-          existing.srcObject?.getTracks().forEach((t) => t.stop());
-          existing.remove();
-          delete captureStreams[displayId];
-        }
-
-        const video = document.createElement("video");
-        video.style.display = "none";
-        document.body.appendChild(video);
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            mandatory: {
-              chromeMediaSource: "desktop",
-              chromeMediaSourceId: id,
-            },
-          },
-        });
-        video.srcObject = stream;
-        await video.play();
-        captureStreams[displayId] = video;
-
-        // Re-acquire if the track ends (display sleep, resolution change, etc.)
-        let retryCount = 0;
-        const MAX_RETRIES = 3;
-        stream.getVideoTracks()[0].addEventListener("ended", () => {
-          if (retryCount >= MAX_RETRIES) {
-            console.error(`Max retries reached for display ${displayId}, giving up`);
-            return;
-          }
-          retryCount++;
-          console.warn(`Track ended for display ${displayId}, re-acquiring (attempt ${retryCount}/${MAX_RETRIES})`);
-          setTimeout(() => {
-            acquireStream(id, displayId).catch((e) =>
-              console.error(`Failed to re-acquire stream for ${displayId}:`, e)
-            );
-          }, 1000 * retryCount);
-        });
-      }
-
-      (async function initStreams() {
-        try {
-          const sources = await window.qgn.getSources();
-          for (const { id, displayId } of sources) {
-            await acquireStream(id, displayId);
-          }
-        } catch (e) {
-          console.error("Failed to init capture streams:", e);
-        }
-      })();
-
-      window.qgn.onActivateCapture(async ({ displayId }) => {
-        currentDisplayId = displayId;
-        let video = captureStreams[displayId];
-
-        // If stream is dead or has no video dimensions, try re-acquiring
-        if (video) {
-          const track = video.srcObject?.getVideoTracks()[0];
-          if (!track || track.readyState === "ended" || video.videoWidth === 0) {
-            console.warn(`Stale stream for display ${displayId}, re-acquiring`);
-            try {
-              const sources = await window.qgn.getSources();
-              const src = sources.find((s) => s.displayId === displayId);
-              if (src) await acquireStream(src.id, displayId);
-              video = captureStreams[displayId];
-            } catch (e) {
-              console.error("Failed to re-acquire stream:", e);
-            }
-          }
-        }
-
-        if (video && video.videoWidth > 0 && video.videoHeight > 0) {
-          captureCanvas.width = video.videoWidth;
-          captureCanvas.height = video.videoHeight;
-          captureCtx.drawImage(video, 0, 0);
-        }
+      // The main process captures a cursor-free frame of the display the moment
+      // the overlay activates; the renderer just shows the selection UI and
+      // reports the chosen region (in CSS pixels) back for cropping.
+      window.qgn.onActivateCapture(() => {
         reset();
       });
 
-      function cropAndSendCapture(region) {
-        const scaleX = captureCanvas.width / window.innerWidth;
-        const scaleY = captureCanvas.height / window.innerHeight;
-        const sx = Math.round(region.x * scaleX);
-        const sy = Math.round(region.y * scaleY);
-        const sw = Math.round(region.width * scaleX);
-        const sh = Math.round(region.height * scaleY);
-
-        const crop = document.createElement("canvas");
-        crop.width = sw;
-        crop.height = sh;
-        crop.getContext("2d").drawImage(
-          captureCanvas, sx, sy, sw, sh, 0, 0, sw, sh
-        );
-        crop.toBlob((blob) => {
-          if (!blob) {
-            console.error("Capture failed: toBlob returned null");
-            window.qgn.cancel();
-            return;
-          }
-          blob.arrayBuffer().then((buf) => {
-            window.qgn.capture(new Uint8Array(buf));
-          });
-        }, "image/png");
+      function sendCapture(region) {
+        window.qgn.captureRegion({
+          x: region.x,
+          y: region.y,
+          width: region.width,
+          height: region.height,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+        });
       }
 
       // --- Selection state ---
@@ -297,7 +201,7 @@
         $instr.hidden = false;
         $instr.textContent = mode === "video"
           ? "Click and drag to select recording area. Press ESC to cancel."
-          : "Click and drag to select area. Press ESC to cancel.";
+          : "Click and drag to select area · Space for full screen · ESC to cancel";
       }
 
       function hideAllSelection() {
@@ -393,7 +297,7 @@
         if (mode === "video") {
           window.qgn.startVideoRecording({ x, y, width: w, height: h });
         } else {
-          cropAndSendCapture({ x, y, width: w, height: h });
+          sendCapture({ x, y, width: w, height: h });
         }
         clear();
       });
@@ -401,6 +305,13 @@
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
           window.qgn.cancel();
+          clear();
+          return;
+        }
+        // Space/Enter grabs the whole display (screenshot mode only).
+        if ((e.key === " " || e.key === "Enter") && mode === "screenshot" && !isSelecting) {
+          e.preventDefault();
+          sendCapture({ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight });
           clear();
         }
       });
@@ -447,16 +358,6 @@
       window.qgn.onResetForVideo(() => resetForVideo());
       window.qgn.onShowRecordingBorder((region) => showRecordingBorder(region));
       window.qgn.onHideRecordingBorder(() => hideRecordingBorder());
-
-      // Clean up persistent streams when window unloads
-      window.addEventListener("beforeunload", () => {
-        for (const [, video] of Object.entries(captureStreams)) {
-          if (video.srcObject) {
-            video.srcObject.getTracks().forEach((t) => t.stop());
-          }
-          video.remove();
-        }
-      });
     </script>
   </body>
 </html>

@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld("preview", {
   close: () => ipcRenderer.send("close-preview"),
   openFile: () => ipcRenderer.send("preview-open-file"),
   edit: () => ipcRenderer.send("preview-edit"),
+  copy: () => ipcRenderer.send("preview-copy"),
+  startDrag: () => ipcRenderer.send("preview-start-drag"),
   pin: (pinned) => ipcRenderer.send("preview-pin", pinned),
   getBounds: () => ipcRenderer.invoke("preview-get-bounds"),
   setBounds: (bounds) => ipcRenderer.send("preview-set-bounds", bounds),

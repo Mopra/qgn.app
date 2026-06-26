@@ -37,6 +37,10 @@ const MIN_ANNOTATION_H = 400;
 const PREVIEW_MIN_IMG_H = 80;
 const PREVIEW_MAX_IMG_H = 200;
 const BOUNDS_DEBOUNCE_MS = 200;
+// Show the one-time "star us on GitHub" prompt once the user has clearly
+// found the app useful (i.e. after this many completed captures).
+const STAR_PROMPT_CAPTURE_THRESHOLD = 10;
+const REPO_URL = "https://github.com/Mopra/qgn.app";
 
 // Shared webPreferences for secure BrowserWindows
 const secureWebPrefs = (preloadFile, opts = {}) => ({
@@ -50,6 +54,23 @@ const secureWebPrefs = (preloadFile, opts = {}) => ({
 // ── CLI mode ──
 // Usage: qgn capture  (takes a fullscreen screenshot, copies to clipboard, saves to disk, exits)
 const cliMode = process.argv.includes("capture");
+
+// ── Single-instance lock ──
+// Enforce one running GUI instance. The CLI `capture` command is intentionally
+// allowed to run as its own short-lived process, so it bypasses the lock.
+let hasInstanceLock = true;
+if (!cliMode) {
+  hasInstanceLock = app.requestSingleInstanceLock();
+  if (!hasInstanceLock) {
+    app.quit();
+  } else {
+    // A second launch (e.g. clicking the shortcut while already in the tray)
+    // triggers a capture on the existing instance instead of starting a new one.
+    app.on("second-instance", () => {
+      if (overlayReady) showOverlay();
+    });
+  }
+}
 
 if (!app.isPackaged) {
   try {
@@ -95,6 +116,24 @@ function getCopyFormat() {
   return loadSettings().copyFormat || "png";
 }
 
+// JPG/WebP encode quality (1–100). Default 90.
+function getImageQuality() {
+  const q = loadSettings().imageQuality;
+  return Number.isFinite(q) && q >= 1 && q <= 100 ? q : 90;
+}
+
+// Seconds before an unpinned preview auto-dismisses. 0 = never. Default 10.
+function getDismissSeconds() {
+  const v = loadSettings().dismissSeconds;
+  return Number.isFinite(v) && v >= 0 ? v : 10;
+}
+
+// Seconds of 3-2-1 countdown before recording begins. 0 = off. Default 3.
+function getRecordCountdown() {
+  const v = loadSettings().recordCountdown;
+  return Number.isFinite(v) && v >= 0 ? v : 3;
+}
+
 const defaultHotkeys = {
   capture: "CommandOrControl+Q",
   record: "CommandOrControl+Shift+Q",
@@ -118,8 +157,7 @@ function hotkeyToLabel(accelerator) {
     .replace("CommandOrControl", "Ctrl")
     .replace("CmdOrCtrl", "Ctrl")
     .replace("Control", "Ctrl")
-    .replace("Command", "Ctrl")
-    .replace(/\+/g, "+");
+    .replace("Command", "Ctrl");
 }
 
 function registerHotkeys() {
@@ -137,7 +175,7 @@ function registerHotkeys() {
   }
 }
 
-async function copyToClipboard(image) {
+function copyToClipboard(image) {
   const fmt = getCopyFormat();
   if (fmt === "base64") {
     clipboard.writeText(`data:image/png;base64,${image.toPNG().toString("base64")}`);
@@ -150,12 +188,13 @@ async function convertImage(pngBuffer, fmt) {
   if (fmt === "png") return { buffer: pngBuffer, ext: "png" };
   try {
     const sharp = require("sharp");
+    const quality = getImageQuality();
     if (fmt === "jpg") {
-      const buf = await sharp(pngBuffer).jpeg({ quality: 90 }).toBuffer();
+      const buf = await sharp(pngBuffer).jpeg({ quality }).toBuffer();
       return { buffer: buf, ext: "jpg" };
     }
     if (fmt === "webp") {
-      const buf = await sharp(pngBuffer).webp({ quality: 90 }).toBuffer();
+      const buf = await sharp(pngBuffer).webp({ quality }).toBuffer();
       return { buffer: buf, ext: "webp" };
     }
   } catch (e) {
@@ -164,11 +203,34 @@ async function convertImage(pngBuffer, fmt) {
   return { buffer: pngBuffer, ext: "png" };
 }
 
+// Re-encode a nativeImage to a path, matching the format implied by its
+// extension (so annotating a .jpg/.webp/.txt file doesn't silently write PNG
+// bytes under the wrong extension). Writes atomically via a temp file.
+async function writeImageToPath(image, filePath) {
+  const ext = path.extname(filePath).slice(1).toLowerCase();
+  const tmp = filePath + ".tmp";
+  if (ext === "txt") {
+    fs.writeFileSync(tmp, `data:image/png;base64,${image.toPNG().toString("base64")}`);
+  } else if (ext === "jpg" || ext === "jpeg") {
+    const { buffer } = await convertImage(image.toPNG(), "jpg");
+    fs.writeFileSync(tmp, buffer);
+  } else if (ext === "webp") {
+    const { buffer } = await convertImage(image.toPNG(), "webp");
+    fs.writeFileSync(tmp, buffer);
+  } else {
+    fs.writeFileSync(tmp, image.toPNG());
+  }
+  fs.renameSync(tmp, filePath);
+}
+
 let overlayWindow = null;
 let tray = null;
 let settingsWindow = null;
 let overlayReady = false;
 let overlayActive = false;
+// Cursor-free capture of the active display, taken when the screenshot overlay
+// activates so it's ready by the time the user finishes selecting a region.
+let pendingScreenshot = null;
 let recordingControlWindow = null;
 let isRecording = false;
 let toastWindow = null;
@@ -180,6 +242,7 @@ let annotationWindow = null;
 let annotationSourcePreview = null;
 let updateWindow = null;
 let welcomeWindow = null;
+let starWindow = null;
 let pinnedDataDir;
 let pinnedManifestPath;
 let isQuitting = false;
@@ -390,8 +453,14 @@ function showOverlay() {
   const cursorPoint = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursorPoint);
 
-  // Position overlay on the correct display and activate immediately —
-  // the renderer grabs a frame from its persistent stream (near-instant)
+  // Exclude the overlay (and its dimming UI) from screen capture so it can
+  // never bleed into the screenshot, then grab a cursor-free frame of the
+  // display up front. desktopCapturer thumbnails omit the OS cursor — unlike a
+  // live getUserMedia stream — so the cursor is no longer baked into captures.
+  overlayWindow.setContentProtection(true);
+  startScreenshotCapture(display);
+
+  // Position overlay on the correct display and activate immediately.
   const { x, y, width, height } = display.bounds;
   overlayWindow.setBounds({ x, y, width, height });
   overlayWindow.setIgnoreMouseEvents(false);
@@ -401,11 +470,36 @@ function showOverlay() {
   overlayWindow.focus();
 }
 
+// Capture the given display now, cursor-free, at native resolution. The
+// resulting nativeImage is cropped to the user's selection once they release.
+function startScreenshotCapture(display) {
+  const sf = display.scaleFactor || 1;
+  pendingScreenshot = desktopCapturer
+    .getSources({
+      types: ["screen"],
+      thumbnailSize: {
+        width: Math.round(display.size.width * sf),
+        height: Math.round(display.size.height * sf),
+      },
+    })
+    .then((sources) => {
+      const source =
+        sources.find((s) => s.display_id === String(display.id)) || sources[0];
+      return source ? source.thumbnail : null;
+    })
+    .catch((e) => {
+      console.error("Screenshot capture failed:", e);
+      return null;
+    });
+}
+
 function hideOverlay() {
   if (!overlayWindow || overlayWindow.isDestroyed()) return;
   overlayActive = false;
+  pendingScreenshot = null;
   overlayWindow.webContents.send("overlay-clear");
   overlayWindow.setIgnoreMouseEvents(true);
+  overlayWindow.setContentProtection(false);
   overlayWindow.blur();
 }
 
@@ -415,11 +509,59 @@ async function handleCaptureData(pngBuffer) {
   let savedPath = null;
   if (getSaveToDisk()) {
     savedPath = await saveToFile(image);
+    if (!savedPath) showErrorToast("Couldn't save to disk — copied to clipboard only");
   }
   showPreview(pngBuffer, image.getSize(), savedPath);
+  recordCaptureForStarPrompt();
 }
 
-function showToast(message) {
+// Capture the whole display under the cursor (cursor-free), no region select.
+async function captureFullScreen() {
+  try {
+    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const sf = display.scaleFactor || 1;
+    const sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize: {
+        width: Math.round(display.size.width * sf),
+        height: Math.round(display.size.height * sf),
+      },
+    });
+    const source =
+      sources.find((s) => s.display_id === String(display.id)) || sources[0];
+    if (!source || source.thumbnail.isEmpty()) {
+      showErrorToast("Couldn't capture the screen");
+      return;
+    }
+    handleCaptureData(source.thumbnail.toPNG());
+  } catch (e) {
+    console.error("Full-screen capture failed:", e);
+    showErrorToast("Couldn't capture the screen");
+  }
+}
+
+// Open the annotation editor on whatever image is currently on the clipboard.
+function annotateClipboard() {
+  const image = clipboard.readImage();
+  if (image.isEmpty()) {
+    showErrorToast("No image on the clipboard to annotate");
+    return;
+  }
+  const png = image.toPNG();
+  openAnnotationEditor({
+    pngBuffer: new Uint8Array(png),
+    imgSize: image.getSize(),
+    window: null,
+    filePath: null,
+    isVideo: false,
+    pinnedImagePath: null,
+    fromClipboard: true,
+  });
+}
+
+// kind: "saved" | "copied" | "error" | other (generic). For errors, `message`
+// is shown to the user via the toast's location hash.
+function showToast(kind, message) {
   if (toastWindow) {
     toastWindow.destroy();
     toastWindow = null;
@@ -428,7 +570,8 @@ function showToast(message) {
   const cursorPoint = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursorPoint);
 
-  const w = 260;
+  const isError = kind === "error";
+  const w = isError ? 340 : 260;
   const h = 44;
   const x = display.bounds.x + Math.round(display.bounds.width / 2) - Math.round(w / 2);
   const y = display.bounds.y + display.bounds.height - TOAST_OFFSET_Y;
@@ -455,8 +598,14 @@ function showToast(message) {
 
   toastWindow.setAlwaysOnTop(true, "screen-saver");
   toastWindow.setIgnoreMouseEvents(true);
-  const toastFile = message === "saved" ? "toast-saved.html" : "toast.html";
-  toastWindow.loadFile(toastFile);
+
+  let toastFile = "toast.html";
+  if (kind === "saved") toastFile = "toast-saved.html";
+  else if (kind === "copied") toastFile = "toast-copied.html";
+  else if (kind === "error") toastFile = "toast-error.html";
+
+  const loadOpts = isError && message ? { hash: encodeURIComponent(message) } : undefined;
+  toastWindow.loadFile(toastFile, loadOpts);
 
   const thisToast = toastWindow;
   thisToast.once("ready-to-show", () => {
@@ -469,6 +618,10 @@ function showToast(message) {
     }
     if (toastWindow === thisToast) toastWindow = null;
   }, TOAST_DURATION_MS);
+}
+
+function showErrorToast(message) {
+  showToast("error", message);
 }
 
 function showWelcome() {
@@ -509,6 +662,66 @@ function showWelcome() {
   });
 }
 
+function showStarPrompt() {
+  if (starWindow && !starWindow.isDestroyed()) return;
+
+  // Mark it shown up front so it never appears more than once, even if the
+  // user quits without interacting with it.
+  saveSetting("starPromptShown", true);
+
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: dw, height: dh } = primaryDisplay.workAreaSize;
+  const w = 360;
+  const h = 320;
+  const x = primaryDisplay.workArea.x + Math.round(dw / 2) - Math.round(w / 2);
+  const y = primaryDisplay.workArea.y + Math.round(dh / 2) - Math.round(h / 2);
+
+  starWindow = new BrowserWindow({
+    width: w,
+    height: h,
+    x,
+    y,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    resizable: false,
+    movable: true,
+    show: false,
+    webPreferences: secureWebPrefs("star-preload.js"),
+  });
+
+  starWindow.setAlwaysOnTop(true, "floating");
+  starWindow.loadFile("star.html");
+
+  starWindow.once("ready-to-show", () => {
+    if (starWindow && !starWindow.isDestroyed()) starWindow.show();
+  });
+
+  starWindow.on("closed", () => {
+    starWindow = null;
+  });
+}
+
+function closeStarPrompt() {
+  if (starWindow && !starWindow.isDestroyed()) {
+    starWindow.destroy();
+  }
+  starWindow = null;
+}
+
+// Count completed captures and, once the user has clearly found the app
+// useful, show a one-time friendly request to star the repo on GitHub.
+function recordCaptureForStarPrompt() {
+  const settings = loadSettings();
+  if (settings.starPromptShown) return;
+  const count = (settings.captureCount || 0) + 1;
+  saveSetting("captureCount", count);
+  if (count >= STAR_PROMPT_CAPTURE_THRESHOLD) {
+    showStarPrompt();
+  }
+}
+
 async function saveToFile(image) {
   try {
     const folder = getSaveFolder();
@@ -539,7 +752,9 @@ function showPreview(pngBuffer, imgSize, filePath, isVideo = false) {
   const imgHeight = Math.max(PREVIEW_MIN_IMG_H, Math.min(PREVIEW_MAX_IMG_H, rawImgHeight));
   const cardHeight = imgHeight + 2; // border only, overlays are absolute
 
-  const display = screen.getPrimaryDisplay();
+  // Show the card on the display where the capture happened (cursor location),
+  // not always the primary monitor.
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   previewDisplay = display.workArea;
 
   // Stack above existing previews
@@ -587,6 +802,7 @@ function showPreview(pngBuffer, imgSize, filePath, isVideo = false) {
         hasFile: !!filePath,
         imgHeight,
         isVideo,
+        dismissSeconds: getDismissSeconds(),
       });
     }
   });
@@ -675,6 +891,7 @@ function openAnnotationEditor(previewEntry) {
 
 let videoSourceId = null;
 let videoScaleFactor = 1;
+let videoDisplaySize = { width: 0, height: 0 };
 
 async function showOverlayForVideo() {
   if (!overlayWindow || overlayWindow.isDestroyed() || !overlayReady) return;
@@ -698,6 +915,12 @@ async function showOverlayForVideo() {
   const cursorPoint = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursorPoint);
   videoScaleFactor = display.scaleFactor;
+  // Physical pixel dimensions of the display, so the recorder can request a
+  // full-resolution (1:1) capture instead of Chromium's downscaled default.
+  videoDisplaySize = {
+    width: Math.round(display.bounds.width * display.scaleFactor),
+    height: Math.round(display.bounds.height * display.scaleFactor),
+  };
 
   // Get source ID up front so it's ready when user finishes selecting
   const sources = await desktopCapturer.getSources({
@@ -810,14 +1033,23 @@ function beginVideoRecording(region) {
     overlayWindow.webContents.send("overlay-show-rec-border", region);
   }
 
-  // Resize control window for recording phase and tell it to start
+  // Resize control window for the recording phase (now includes a Pause
+  // button) and keep it centered.
+  const recBounds = recordingControlWindow.getBounds();
   recordingControlWindow.setBounds({
-    ...recordingControlWindow.getBounds(),
-    width: 230,
+    x: recBounds.x - 25,
+    y: recBounds.y,
+    width: 280,
+    height: recBounds.height,
   });
 
   recordingControlWindow.webContents.send("start-recording", {
     sourceId: videoSourceId,
+    countdown: getRecordCountdown(),
+    display: {
+      width: videoDisplaySize.width,
+      height: videoDisplaySize.height,
+    },
     region: {
       x: Math.round(region.x * videoScaleFactor),
       y: Math.round(region.y * videoScaleFactor),
@@ -864,8 +1096,10 @@ function saveRecording(data, thumbnailDataUrl, format) {
     } else {
       showToast("saved");
     }
+    recordCaptureForStarPrompt();
   } catch (e) {
     console.error("Failed to save recording:", e);
+    showErrorToast("Couldn't save the recording");
     stopRecordingUI();
   }
 }
@@ -888,6 +1122,8 @@ function rebuildTrayMenu() {
   const contextMenu = Menu.buildFromTemplate([
     { label: `Capture (${hotkeyToLabel(hk.capture)})`, click: showOverlay },
     { label: `Record (${hotkeyToLabel(hk.record)})`, click: showOverlayForVideo },
+    { label: "Capture full screen", click: captureFullScreen },
+    { label: "Annotate clipboard image", click: annotateClipboard },
     { type: "separator" },
     { label: "Settings...", click: toggleSettingsWindow },
     { type: "separator" },
@@ -905,7 +1141,7 @@ function toggleSettingsWindow() {
 
   const trayBounds = tray.getBounds();
   const winW = 260;
-  const winH = 370;
+  const winH = 480; // initial; the renderer resizes to fit its content
 
   // Position above the tray icon (Windows taskbar is typically at the bottom)
   const x = Math.round(trayBounds.x + trayBounds.width / 2 - winW / 2);
@@ -943,13 +1179,18 @@ function toggleSettingsWindow() {
   });
 }
 
+function updateTrayTooltip() {
+  if (!tray) return;
+  const hk = getHotkeys();
+  tray.setToolTip(`qgn — ${hotkeyToLabel(hk.capture)} capture, ${hotkeyToLabel(hk.record)} record`);
+}
+
 function createTray() {
   const trayIcon = nativeImage.createFromPath(
     path.join(__dirname, "icons", "tray.png")
   );
   tray = new Tray(trayIcon);
-  const hk = getHotkeys();
-  tray.setToolTip(`qgn — ${hotkeyToLabel(hk.capture)} capture, ${hotkeyToLabel(hk.record)} record`);
+  updateTrayTooltip();
   rebuildTrayMenu();
 }
 
@@ -1114,6 +1355,9 @@ async function cliCapture() {
 }
 
 app.whenReady().then(() => {
+  // A second instance that failed to get the lock is quitting; do no setup.
+  if (!hasInstanceLock) return;
+
   if (cliMode) {
     cliCapture();
     return;
@@ -1176,17 +1420,60 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("get-sources", async () => {
-    const sources = await desktopCapturer.getSources({
-      types: ["screen"],
-      thumbnailSize: { width: 1, height: 1 },
-    });
-    return sources.map((s) => ({ id: s.id, displayId: s.display_id }));
+  // Open the GitHub repo and close the star prompt (if it's the source).
+  ipcMain.on("star-open", () => {
+    shell.openExternal(REPO_URL);
+    closeStarPrompt();
   });
 
-  ipcMain.on("capture", (_event, pngBuffer) => {
-    hideOverlay();
-    handleCaptureData(pngBuffer);
+  ipcMain.on("star-dismiss", () => {
+    closeStarPrompt();
+  });
+
+  ipcMain.on("capture-region", async (_event, region) => {
+    // Validate the selection coming from the renderer.
+    const valid =
+      region &&
+      [region.x, region.y, region.width, region.height, region.viewportWidth, region.viewportHeight]
+        .every((n) => Number.isFinite(n)) &&
+      region.width > 0 && region.height > 0 &&
+      region.viewportWidth > 0 && region.viewportHeight > 0;
+
+    // Stop intercepting the mouse and clear the selection UI, but keep the
+    // overlay content-protected until the capture resolves so the dimming can't
+    // leak into a frame that may still be in flight.
+    overlayActive = false;
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.webContents.send("overlay-clear");
+      overlayWindow.setIgnoreMouseEvents(true);
+      overlayWindow.blur();
+    }
+
+    const image = pendingScreenshot ? await pendingScreenshot : null;
+    pendingScreenshot = null;
+
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.setContentProtection(false);
+    }
+
+    if (!valid || !image || image.isEmpty()) return;
+
+    const size = image.getSize();
+    const scaleX = size.width / region.viewportWidth;
+    const scaleY = size.height / region.viewportHeight;
+    let x = Math.round(region.x * scaleX);
+    let y = Math.round(region.y * scaleY);
+    let w = Math.round(region.width * scaleX);
+    let h = Math.round(region.height * scaleY);
+
+    // Clamp to the captured image bounds.
+    x = Math.max(0, Math.min(x, size.width - 1));
+    y = Math.max(0, Math.min(y, size.height - 1));
+    w = Math.max(1, Math.min(w, size.width - x));
+    h = Math.max(1, Math.min(h, size.height - y));
+
+    const crop = image.crop({ x, y, width: w, height: h });
+    handleCaptureData(crop.toPNG());
   });
 
   ipcMain.on("close-mic-dropdown", () => {
@@ -1302,34 +1589,83 @@ app.whenReady().then(() => {
     if (entry) openAnnotationEditor(entry);
   });
 
-  ipcMain.on("annotation-save", (event, pngBuffer) => {
+  ipcMain.on("preview-copy", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const entry = previewWindows.find((p) => p.window === win);
+    if (entry && entry.pngBuffer) {
+      const image = nativeImage.createFromBuffer(Buffer.from(entry.pngBuffer));
+      copyToClipboard(image);
+      showToast("copied");
+    }
+  });
+
+  ipcMain.on("preview-start-drag", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const entry = previewWindows.find((p) => p.window === win);
+    if (!entry) return;
+
+    // Prefer the real saved file; otherwise materialize a temp PNG so the
+    // capture can still be dragged into other apps when save-to-disk is off.
+    let filePath = entry.filePath;
+    if (!filePath || !fs.existsSync(filePath)) {
+      try {
+        filePath = path.join(app.getPath("temp"), `qgn-drag-${Date.now()}.png`);
+        const image = nativeImage.createFromBuffer(Buffer.from(entry.pngBuffer));
+        fs.writeFileSync(filePath, image.toPNG());
+      } catch (e) {
+        console.error("Failed to prepare drag file:", e);
+        return;
+      }
+    }
+
+    let icon = nativeImage.createFromBuffer(Buffer.from(entry.pngBuffer));
+    try { icon = icon.resize({ width: 128 }); } catch {}
+    if (icon.isEmpty()) {
+      icon = nativeImage.createFromPath(path.join(__dirname, "icons", "icon-64.png"));
+    }
+
+    try {
+      win.webContents.startDrag({ file: filePath, icon });
+    } catch (e) {
+      console.error("startDrag failed:", e);
+    }
+  });
+
+  ipcMain.on("annotation-save", async (event, pngBuffer) => {
     const image = nativeImage.createFromBuffer(Buffer.from(pngBuffer));
     copyToClipboard(image);
 
-    if (annotationSourcePreview) {
+    const src = annotationSourcePreview;
+
+    if (src && src.fromClipboard) {
+      // Annotating a clipboard image: treat the result as a fresh capture
+      // (save to disk if enabled, show a preview card).
+      handleCaptureData(Buffer.from(pngBuffer));
+    } else if (src) {
       try {
-        if (annotationSourcePreview.filePath && !annotationSourcePreview.isVideo) {
-          const tmp = annotationSourcePreview.filePath + ".tmp";
-          fs.writeFileSync(tmp, image.toPNG());
-          fs.renameSync(tmp, annotationSourcePreview.filePath);
+        if (src.filePath && !src.isVideo) {
+          // Re-encode to match the file's real format instead of writing PNG
+          // bytes under a .jpg/.webp/.txt extension.
+          await writeImageToPath(image, src.filePath);
         }
       } catch (e) {
         console.error("Failed to write annotated file:", e);
+        showErrorToast("Couldn't save annotation to disk");
       }
-      annotationSourcePreview.pngBuffer = pngBuffer;
+      src.pngBuffer = pngBuffer;
 
-      // Update persisted pinned image if stored in pinnedDataDir
-      if (annotationSourcePreview.pinnedImagePath && annotationSourcePreview.pinnedImagePath !== annotationSourcePreview.filePath) {
+      // Update persisted pinned image copy (always PNG in pinnedDataDir)
+      if (src.pinnedImagePath && src.pinnedImagePath !== src.filePath) {
         try {
-          fs.writeFileSync(annotationSourcePreview.pinnedImagePath, image.toPNG());
+          fs.writeFileSync(src.pinnedImagePath, image.toPNG());
         } catch (e) {
           console.error("Failed to write pinned image:", e);
         }
       }
 
-      if (annotationSourcePreview.window && !annotationSourcePreview.window.isDestroyed()) {
+      if (src.window && !src.window.isDestroyed()) {
         const imageDataUrl = `data:image/png;base64,${Buffer.from(pngBuffer).toString("base64")}`;
-        annotationSourcePreview.window.webContents.send("update-preview", { imageDataUrl });
+        src.window.webContents.send("update-preview", { imageDataUrl });
       }
     }
 
@@ -1342,26 +1678,24 @@ app.whenReady().then(() => {
     if (win && !win.isDestroyed()) win.destroy();
   });
 
-  ipcMain.handle("get-settings", () => {
-    const hk = getHotkeys();
+  function currentSettingsPayload() {
     return {
       copyFormat: getCopyFormat(),
       saveToDisk: getSaveToDisk(),
       saveFolder: getSaveFolder(),
-      hotkeys: hk,
+      hotkeys: getHotkeys(),
       startOnStartup: getStartOnStartup(),
+      imageQuality: getImageQuality(),
+      dismissSeconds: getDismissSeconds(),
+      recordCountdown: getRecordCountdown(),
     };
-  });
+  }
+
+  ipcMain.handle("get-settings", () => currentSettingsPayload());
 
   function sendSettingsUpdate() {
     if (settingsWindow && !settingsWindow.isDestroyed()) {
-      settingsWindow.webContents.send("settings-updated", {
-        copyFormat: getCopyFormat(),
-        saveToDisk: getSaveToDisk(),
-        saveFolder: getSaveFolder(),
-        hotkeys: getHotkeys(),
-        startOnStartup: getStartOnStartup(),
-      });
+      settingsWindow.webContents.send("settings-updated", currentSettingsPayload());
     }
   }
 
@@ -1389,20 +1723,89 @@ app.whenReady().then(() => {
     // Validate action and accelerator before registering
     if (!["capture", "record"].includes(action)) return;
     if (typeof accelerator !== "string" || accelerator.length > 100) return;
+
+    // Reject a shortcut already bound to the other action.
+    const other = action === "capture" ? "record" : "capture";
+    if (getHotkeys()[other] === accelerator) {
+      if (settingsWindow && !settingsWindow.isDestroyed()) {
+        settingsWindow.webContents.send("hotkey-error", {
+          action,
+          message: `Already used by ${other === "capture" ? "Capture" : "Record"}`,
+        });
+      }
+      return;
+    }
+
     // Validate the accelerator by attempting to register it first
     try {
       globalShortcut.register(accelerator, () => {});
       globalShortcut.unregister(accelerator);
     } catch (e) {
       console.error("Invalid accelerator:", accelerator, e);
+      if (settingsWindow && !settingsWindow.isDestroyed()) {
+        settingsWindow.webContents.send("hotkey-error", { action, message: "Invalid shortcut" });
+      }
       return;
     }
     saveSetting(`hotkey_${action}`, accelerator);
     registerHotkeys();
     rebuildTrayMenu();
-    const hk = getHotkeys();
-    tray.setToolTip(`qgn — ${hotkeyToLabel(hk.capture)} capture, ${hotkeyToLabel(hk.record)} record`);
+    updateTrayTooltip();
     sendSettingsUpdate();
+  });
+
+  ipcMain.on("reset-hotkeys", () => {
+    saveSetting("hotkey_capture", defaultHotkeys.capture);
+    saveSetting("hotkey_record", defaultHotkeys.record);
+    registerHotkeys();
+    rebuildTrayMenu();
+    updateTrayTooltip();
+    sendSettingsUpdate();
+  });
+
+  ipcMain.on("set-image-quality", (_event, value) => {
+    const q = Number(value);
+    if (!Number.isFinite(q) || q < 1 || q > 100) return;
+    saveSetting("imageQuality", Math.round(q));
+    sendSettingsUpdate();
+  });
+
+  ipcMain.on("set-dismiss-seconds", (_event, value) => {
+    const v = Number(value);
+    if (!Number.isFinite(v) || v < 0 || v > 600) return;
+    saveSetting("dismissSeconds", Math.round(v));
+    sendSettingsUpdate();
+  });
+
+  ipcMain.on("set-record-countdown", (_event, value) => {
+    const v = Number(value);
+    if (!Number.isFinite(v) || v < 0 || v > 10) return;
+    saveSetting("recordCountdown", Math.round(v));
+    sendSettingsUpdate();
+  });
+
+  ipcMain.on("open-save-folder", () => {
+    const folder = getSaveFolder();
+    try {
+      fs.mkdirSync(folder, { recursive: true });
+    } catch {}
+    shell.openPath(folder);
+  });
+
+  // Resize the settings popover to fit its content, keeping it anchored above
+  // the tray icon.
+  ipcMain.on("settings-resize", (event, height) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed() || win !== settingsWindow || !tray) return;
+    const h = Math.max(120, Math.min(900, Math.round(Number(height) || 0)));
+    if (!h) return;
+    const b = win.getBounds();
+    const tb = tray.getBounds();
+    win.setBounds({ x: b.x, y: Math.round(tb.y - h - 4), width: b.width, height: h });
+  });
+
+  ipcMain.on("recording-error", (_event, message) => {
+    showErrorToast(typeof message === "string" && message ? message : "Recording failed");
   });
 
   ipcMain.on("choose-save-folder", async () => {

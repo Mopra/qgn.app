@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>QGN Notification</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+        -webkit-app-region: no-drag;
+      }
+      .toast {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 20px;
+        max-width: 100%;
+        background: rgba(40, 22, 22, 0.55);
+        backdrop-filter: blur(60px) saturate(1.8);
+        -webkit-backdrop-filter: blur(60px) saturate(1.8);
+        border: 1px solid rgba(255, 99, 89, 0.4);
+        border-radius: 20px;
+        font: 13px/1.2 -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.95);
+        letter-spacing: 0.01em;
+        white-space: nowrap;
+        opacity: 0;
+        transform: translateY(6px) scale(0.96);
+        animation: fadeIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards,
+                   fadeOut 0.3s ease-in 2.5s forwards;
+        box-shadow:
+          0 8px 32px rgba(0, 0, 0, 0.3),
+          0 2px 8px rgba(0, 0, 0, 0.2),
+          inset 0 0.5px 0 rgba(255, 255, 255, 0.2);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #ff5b50;
+        flex-shrink: 0;
+        box-shadow: 0 0 8px rgba(255, 91, 80, 0.6);
+      }
+      .msg {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      @keyframes fadeIn {
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes fadeOut {
+        to { opacity: 0; transform: translateY(-6px) scale(0.96); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toast">
+      <span class="dot"></span>
+      <span class="msg" id="msg">Something went wrong</span>
+    </div>
+    <script>
+      // The message is passed via the location hash (set by the main process).
+      try {
+        const raw = decodeURIComponent(location.hash.replace(/^#/, ""));
+        if (raw) document.getElementById("msg").textContent = raw;
+      } catch (e) {}
+    </script>
+  </body>
+</html>

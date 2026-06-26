@@ -1,11 +1,10 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("qgn", {
-  capture: (pngBuffer) => ipcRenderer.send("capture", pngBuffer),
+  captureRegion: (region) => ipcRenderer.send("capture-region", region),
   startVideoRecording: (region) =>
     ipcRenderer.send("start-video-recording", region),
   cancel: () => ipcRenderer.send("cancel"),
-  getSources: () => ipcRenderer.invoke("get-sources"),
   onActivateCapture: (cb) => {
     ipcRenderer.removeAllListeners("activate-capture");
     ipcRenderer.on("activate-capture", (_e, data) => cb(data));
