@@ -1,0 +1,1755 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:">
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        height: 100%;
+        background: #141414;
+        overflow: hidden;
+        user-select: none;
+        font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 13px;
+      }
+      .app { display: flex; flex-direction: column; height: 100%; }
+
+      /* ── Top bar ── */
+      .topbar {
+        height: 48px;
+        display: flex;
+        align-items: center;
+        padding: 0 14px;
+        gap: 10px;
+        background: rgba(24, 24, 24, 0.98);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        flex-shrink: 0;
+        -webkit-app-region: drag;
+      }
+      .topbar > * { -webkit-app-region: no-drag; }
+      .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: 0.02em; }
+      .brand svg { width: 18px; height: 18px; opacity: 0.85; }
+      .brand .muted { color: rgba(255, 255, 255, 0.4); font-weight: 500; }
+      .topbar-spacer { flex: 1; height: 100%; -webkit-app-region: drag; }
+
+      .actions { display: flex; gap: 8px; }
+      .btn {
+        height: 32px;
+        padding: 0 14px;
+        border-radius: 7px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 12.5px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.12s, border-color 0.12s;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .btn:hover { background: rgba(255, 255, 255, 0.12); }
+      .btn svg { width: 14px; height: 14px; }
+      .btn.primary { background: #007aff; border-color: #007aff; color: #fff; }
+      .btn.primary:hover { background: #0a6ad8; }
+      .btn[disabled] { opacity: 0.45; cursor: default; pointer-events: none; }
+
+      /* ── Main ── */
+      .main { flex: 1; display: flex; min-height: 0; }
+
+      /* ── Sidebar ── */
+      .sidebar {
+        width: 288px;
+        flex-shrink: 0;
+        background: rgba(20, 20, 20, 0.98);
+        border-right: 1px solid rgba(255, 255, 255, 0.06);
+        overflow-y: auto;
+        padding: 16px 16px 28px;
+      }
+      .sidebar::-webkit-scrollbar { width: 8px; }
+      .sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+
+      .section { margin-bottom: 22px; }
+      .section-title {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: rgba(255, 255, 255, 0.4);
+        margin-bottom: 10px;
+      }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+      .row:last-child { margin-bottom: 0; }
+      .row-label { font-size: 12.5px; color: rgba(255, 255, 255, 0.75); flex-shrink: 0; }
+      .row-value { font-size: 12px; color: rgba(255, 255, 255, 0.45); font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
+      .hint { font-size: 11.5px; color: rgba(255, 255, 255, 0.4); line-height: 1.45; margin-top: 10px; }
+
+      /* ── Segmented control ── */
+      .segmented {
+        display: flex;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 8px;
+        padding: 3px;
+        gap: 3px;
+      }
+      .segmented.full { width: 100%; }
+      .seg {
+        flex: 1;
+        height: 30px;
+        border: none;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.6);
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        transition: background 0.12s, color 0.12s;
+        white-space: nowrap;
+        padding: 0 6px;
+      }
+      .seg:hover { color: rgba(255, 255, 255, 0.9); }
+      .seg.active { background: rgba(255, 255, 255, 0.14); color: #fff; }
+
+      /* ── Swatch grid ── */
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .swatch {
+        position: relative;
+        aspect-ratio: 1;
+        border-radius: 8px;
+        cursor: pointer;
+        border: 2px solid transparent;
+        transition: transform 0.1s, border-color 0.12s;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      }
+      .swatch:hover { transform: scale(1.07); }
+      .swatch.active { border-color: #fff; }
+      .swatch.custom { display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, 0.9); }
+      .swatch.custom svg { width: 15px; height: 15px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45)); pointer-events: none; }
+
+      /* ── Solid color picker ── */
+      .color-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+      .color-input {
+        width: 44px;
+        height: 36px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        background: transparent;
+        cursor: pointer;
+        padding: 2px;
+      }
+      .color-input::-webkit-color-swatch-wrapper { padding: 0; }
+      .color-input::-webkit-color-swatch { border: none; border-radius: 6px; }
+      .color-hex {
+        flex: 1;
+        height: 36px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        color: rgba(255, 255, 255, 0.85);
+        padding: 0 10px;
+        font-size: 13px;
+        font-family: ui-monospace, "SF Mono", Consolas, monospace;
+        text-transform: uppercase;
+      }
+      .color-hex:focus { outline: none; border-color: rgba(255, 255, 255, 0.25); }
+
+      /* ── Saved color palette ── */
+      .palette {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .palette:empty { display: none; }
+      .pal {
+        position: relative;
+        aspect-ratio: 1;
+        border-radius: 8px;
+        cursor: pointer;
+        border: 2px solid transparent;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+        transition: transform 0.1s, border-color 0.12s;
+      }
+      .pal:hover { transform: scale(1.08); }
+      .pal.active { border-color: #fff; }
+      .pal .remove, .swatch .remove {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        background: rgba(18, 18, 18, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: #fff;
+        font-size: 11px;
+        line-height: 1;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 2;
+      }
+      .pal:hover .remove, .swatch:hover .remove { display: flex; }
+      .pal .remove:hover, .swatch .remove:hover { background: #e0463e; border-color: #e0463e; }
+
+      /* ── Upload ── */
+      .upload-btn {
+        margin-top: 12px;
+        width: 100%;
+        height: 72px;
+        border: 1.5px dashed rgba(255, 255, 255, 0.18);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+        color: rgba(255, 255, 255, 0.55);
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 12px;
+        transition: background 0.12s, border-color 0.12s, color 0.12s;
+      }
+      .upload-btn:hover { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.3); color: rgba(255, 255, 255, 0.8); }
+      .upload-btn svg { width: 20px; height: 20px; opacity: 0.7; }
+      .upload-btn.has-image { border-style: solid; border-color: rgba(0, 122, 255, 0.5); color: rgba(255, 255, 255, 0.85); }
+
+      /* ── Sliders ── */
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        flex: 1;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.14);
+        cursor: pointer;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      }
+
+      .text-input {
+        width: 100%;
+        height: 34px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        color: rgba(255, 255, 255, 0.85);
+        padding: 0 10px;
+        font-size: 13px;
+        margin-top: 8px;
+      }
+      .text-input:focus { outline: none; border-color: rgba(255, 255, 255, 0.25); }
+
+      .hidden { display: none !important; }
+
+      /* ── Stage (preview + transport) ── */
+      .stage { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+      /* ── Preview area ── */
+      .preview-area {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 36px;
+        background:
+          radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.03), transparent 70%),
+          #121212;
+        overflow: hidden;
+      }
+      #previewCanvas {
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: 2px;
+        box-shadow: 0 10px 50px rgba(0, 0, 0, 0.55);
+      }
+
+      /* ── Export progress overlay ── */
+      .progress-overlay {
+        position: absolute;
+        inset: 0;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: rgba(10, 10, 10, 0.84);
+        z-index: 5;
+      }
+      .progress-overlay.active { display: flex; }
+      .progress-title { font-size: 14px; font-weight: 600; letter-spacing: 0.01em; }
+      .progress-sub { font-size: 12px; color: rgba(255, 255, 255, 0.5); }
+      .progress-bar {
+        width: 280px;
+        max-width: 60%;
+        height: 6px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.12);
+        overflow: hidden;
+      }
+      .progress-bar-fill { height: 100%; width: 0%; background: #007aff; border-radius: 3px; transition: width 0.15s linear; }
+
+      /* ── Transport bar ── */
+      .transport {
+        height: 64px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 18px;
+        background: rgba(20, 20, 20, 0.98);
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .tbtn {
+        width: 34px;
+        height: 34px;
+        flex-shrink: 0;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.85);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.12s, border-color 0.12s, color 0.12s;
+        position: relative;
+      }
+      .tbtn:hover { background: rgba(255, 255, 255, 0.12); }
+      .tbtn svg { width: 17px; height: 17px; fill: currentColor; }
+      .tbtn.active { background: rgba(0, 122, 255, 0.22); border-color: rgba(0, 122, 255, 0.6); color: #fff; }
+      .tbtn .slash {
+        display: none;
+        position: absolute;
+        inset: 0;
+        margin: auto;
+        width: 22px;
+        height: 22px;
+        pointer-events: none;
+      }
+      .tbtn.muted .slash { display: block; }
+
+      .time {
+        font-variant-numeric: tabular-nums;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.6);
+        min-width: 86px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .time b { color: rgba(255, 255, 255, 0.95); font-weight: 600; }
+
+      /* ── Timeline / trim ── */
+      .timeline {
+        position: relative;
+        flex: 1;
+        height: 40px;
+        cursor: pointer;
+        touch-action: none;
+      }
+      .track {
+        position: absolute;
+        top: 50%;
+        left: 0; right: 0;
+        height: 8px;
+        transform: translateY(-50%);
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        overflow: hidden;
+      }
+      .track-sel {
+        position: absolute;
+        top: 50%;
+        height: 8px;
+        transform: translateY(-50%);
+        background: rgba(0, 122, 255, 0.55);
+        pointer-events: none;
+      }
+      .playhead {
+        position: absolute;
+        top: 6px; bottom: 6px;
+        width: 2px;
+        margin-left: -1px;
+        background: #fff;
+        border-radius: 1px;
+        pointer-events: none;
+        box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+      }
+      .handle {
+        position: absolute;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 12px;
+        height: 26px;
+        border-radius: 4px;
+        background: #fff;
+        cursor: ew-resize;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+        z-index: 2;
+      }
+      .handle::after {
+        content: "";
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 2px; height: 12px;
+        background: rgba(0, 0, 0, 0.35);
+        border-radius: 1px;
+        box-shadow: 3px 0 0 rgba(0,0,0,0.35), -3px 0 0 rgba(0,0,0,0.35);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="topbar">
+        <div class="brand">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>
+          <span>Video Studio <span class="muted">· Reel</span></span>
+        </div>
+        <div class="topbar-spacer"></div>
+        <div class="actions">
+          <button class="btn" id="cancelBtn">Cancel</button>
+          <button class="btn primary" id="exportBtn" title="Render & save the framed video">Export MP4</button>
+        </div>
+      </div>
+
+      <div class="main">
+        <div class="sidebar">
+          <!-- Background -->
+          <div class="section">
+            <div class="section-title">Background</div>
+            <div class="segmented full" id="bgTabs">
+              <button class="seg active" data-bg="gradient">Gradient</button>
+              <button class="seg" data-bg="wallpaper">Wallpaper</button>
+              <button class="seg" data-bg="solid">Solid</button>
+              <button class="seg" data-bg="image">Image</button>
+            </div>
+
+            <div class="swatches" id="gradientSwatches"></div>
+            <div class="hidden" id="gradientCustomPanel">
+              <div class="color-row">
+                <input type="color" class="color-input" id="gradC0" value="#6366f1" />
+                <input type="text" class="color-hex" id="gradC0Hex" value="#6366F1" maxlength="7" />
+              </div>
+              <div class="color-row">
+                <input type="color" class="color-input" id="gradC1" value="#9333ea" />
+                <input type="text" class="color-hex" id="gradC1Hex" value="#9333EA" maxlength="7" />
+              </div>
+              <div class="row" style="margin-top: 14px; margin-bottom: 0;">
+                <span class="row-label">Angle</span>
+                <input type="range" id="gradAngle" min="0" max="360" value="135" />
+                <span class="row-value" id="gradAngleValue">135°</span>
+              </div>
+              <button class="btn" id="saveGradientBtn" style="margin-top: 14px; width: 100%; justify-content: center;" title="Save this gradient for reuse">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add to palette
+              </button>
+            </div>
+            <div class="swatches hidden" id="wallpaperSwatches"></div>
+
+            <div class="hidden" id="solidPanel">
+              <div class="color-row">
+                <input type="color" class="color-input" id="solidColor" value="#6366f1" />
+                <input type="text" class="color-hex" id="solidHex" value="#6366F1" maxlength="7" />
+              </div>
+              <div class="palette" id="solidPalette"></div>
+            </div>
+
+            <div class="hidden" id="imagePanel">
+              <button class="upload-btn" id="uploadBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span id="uploadLabel">Upload a background image</span>
+              </button>
+              <input type="file" id="fileInput" accept="image/*" class="hidden" />
+            </div>
+          </div>
+
+          <!-- Frame -->
+          <div class="section">
+            <div class="section-title">Frame</div>
+            <div class="segmented full" id="frameTabs">
+              <button class="seg" data-frame="none">None</button>
+              <button class="seg active" data-frame="window">Window</button>
+              <button class="seg" data-frame="browser">Browser</button>
+            </div>
+
+            <div class="hidden" id="browserOptions">
+              <input type="text" class="text-input" id="urlInput" value="app.example.com" placeholder="address bar text" />
+              <div class="row" style="margin-top: 12px;">
+                <span class="row-label">Bar theme</span>
+                <div class="segmented" id="frameThemeTabs" style="width: 150px;">
+                  <button class="seg active" data-theme="light">Light</button>
+                  <button class="seg" data-theme="dark">Dark</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Layout -->
+          <div class="section">
+            <div class="section-title">Layout</div>
+            <div class="row">
+              <span class="row-label">Padding</span>
+              <input type="range" id="padRange" min="0" max="100" value="32" />
+              <span class="row-value" id="padValue">32</span>
+            </div>
+            <div class="row">
+              <span class="row-label">Rounding</span>
+              <input type="range" id="radiusRange" min="0" max="100" value="36" />
+              <span class="row-value" id="radiusValue">36</span>
+            </div>
+            <div class="row">
+              <span class="row-label">Shadow</span>
+              <input type="range" id="shadowRange" min="0" max="100" value="42" />
+              <span class="row-value" id="shadowValue">42</span>
+            </div>
+            <div class="row" style="align-items: flex-start; flex-direction: column; gap: 8px;">
+              <span class="row-label">Aspect ratio</span>
+              <div class="segmented full" id="aspectTabs">
+                <button class="seg active" data-aspect="auto">Auto</button>
+                <button class="seg" data-aspect="16:9">16:9</button>
+                <button class="seg" data-aspect="4:3">4:3</button>
+                <button class="seg" data-aspect="1:1">1:1</button>
+                <button class="seg" data-aspect="9:16">9:16</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Export -->
+          <div class="section">
+            <div class="section-title">Export format</div>
+            <div class="segmented full" id="formatTabs">
+              <button class="seg active" data-format="mp4">MP4</button>
+              <button class="seg" data-format="webm">WebM</button>
+              <button class="seg" data-format="gif">GIF</button>
+              <button class="seg" data-format="webp">WebP</button>
+            </div>
+            <div class="hint" id="formatHint">MP4 — best for sharing. Keeps audio. Rendered in real time.</div>
+          </div>
+        </div>
+
+        <div class="stage">
+          <div class="preview-area" id="previewArea">
+            <canvas id="previewCanvas"></canvas>
+            <div class="progress-overlay" id="progressOverlay">
+              <div class="progress-title" id="progressTitle">Rendering…</div>
+              <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+              <div class="progress-sub" id="progressSub">0%</div>
+              <button class="btn" id="cancelExportBtn">Cancel</button>
+            </div>
+          </div>
+
+          <div class="transport">
+            <button class="tbtn" id="playBtn" title="Play / pause (Space)">
+              <svg id="playIcon" viewBox="0 0 24 24"><polygon points="7,4 20,12 7,20"/></svg>
+            </button>
+            <span class="time" id="timeLabel"><b>0:00</b> / 0:00</span>
+            <div class="timeline" id="timeline">
+              <div class="track">
+                <div class="track-sel" id="trackSel"></div>
+              </div>
+              <div class="playhead" id="playhead" style="left: 0%;"></div>
+              <div class="handle" id="handleIn" style="left: 0%;" title="Trim start (I)"></div>
+              <div class="handle" id="handleOut" style="left: 100%;" title="Trim end (O)"></div>
+            </div>
+            <button class="tbtn" id="loopBtn" title="Loop the trimmed range">
+              <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+            </button>
+            <button class="tbtn" id="muteBtn" title="Mute audio in the export">
+              <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+              <svg class="slash" viewBox="0 0 24 24"><line x1="3" y1="3" x2="21" y2="21" stroke="#ff3b30" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden source video -->
+    <video id="srcVideo" style="position: fixed; left: -9999px; width: 1px; height: 1px;" playsinline></video>
+
+    <script>
+      /* ───────────────────────── Presets ───────────────────────── */
+      const GRADIENTS = [
+        { id: "indigo", angle: 135, stops: [[0, "#4f46e5"], [1, "#9333ea"]] },
+        { id: "blush",  angle: 135, stops: [[0, "#ff6a88"], [1, "#ff99ac"]] },
+        { id: "ocean",  angle: 135, stops: [[0, "#2193b0"], [1, "#6dd5ed"]] },
+        { id: "lime",   angle: 135, stops: [[0, "#0ba360"], [1, "#3cba92"]] },
+        { id: "peach",  angle: 135, stops: [[0, "#ffd194"], [1, "#fc8d6f"]] },
+        { id: "grape",  angle: 135, stops: [[0, "#654ea3"], [1, "#eaafc8"]] },
+        { id: "sky",    angle: 135, stops: [[0, "#56ccf2"], [1, "#2f80ed"]] },
+        { id: "slate",  angle: 135, stops: [[0, "#e0eafc"], [1, "#cfdef3"]] },
+        { id: "coral",  angle: 135, stops: [[0, "#ff9966"], [1, "#ff5e62"]] },
+        { id: "night",  angle: 135, stops: [[0, "#0f2027"], [0.5, "#203a43"], [1, "#2c5364"]] },
+      ];
+
+      const WALLPAPERS = [
+        { id: "aurora",  base: "#0b1020", blend: "lighter", blobs: [
+          { x: 0.18, y: 0.22, r: 0.75, c: "#3b82f6" },
+          { x: 0.84, y: 0.20, r: 0.65, c: "#8b5cf6" },
+          { x: 0.62, y: 0.88, r: 0.80, c: "#06b6d4" } ] },
+        { id: "sequoia", base: "#1a0f2e", blend: "lighter", blobs: [
+          { x: 0.20, y: 0.25, r: 0.70, c: "#ec4899" },
+          { x: 0.85, y: 0.30, r: 0.70, c: "#8b5cf6" },
+          { x: 0.55, y: 0.90, r: 0.75, c: "#f97316" } ] },
+        { id: "mint",    base: "#04211a", blend: "lighter", blobs: [
+          { x: 0.22, y: 0.20, r: 0.72, c: "#10b981" },
+          { x: 0.82, y: 0.28, r: 0.66, c: "#22d3ee" },
+          { x: 0.55, y: 0.92, r: 0.72, c: "#34d399" } ] },
+        { id: "bigsur",  base: "#08243f", blend: "lighter", blobs: [
+          { x: 0.15, y: 0.25, r: 0.75, c: "#2563eb" },
+          { x: 0.80, y: 0.18, r: 0.65, c: "#0ea5e9" },
+          { x: 0.70, y: 0.90, r: 0.80, c: "#6366f1" } ] },
+        { id: "ember",   base: "#1b0a12", blend: "lighter", blobs: [
+          { x: 0.20, y: 0.28, r: 0.72, c: "#f43f5e" },
+          { x: 0.85, y: 0.25, r: 0.62, c: "#fb923c" },
+          { x: 0.55, y: 0.92, r: 0.70, c: "#a855f7" } ] },
+        { id: "bloom",   base: "#fde4ec", blend: "normal", blobs: [
+          { x: 0.18, y: 0.22, r: 0.70, c: "#c7d2fe" },
+          { x: 0.84, y: 0.26, r: 0.66, c: "#fbcfe8" },
+          { x: 0.55, y: 0.88, r: 0.74, c: "#bae6fd" } ] },
+      ];
+
+      const ASPECTS = { auto: null, "16:9": 16 / 9, "4:3": 4 / 3, "1:1": 1, "9:16": 9 / 16, "3:2": 3 / 2 };
+
+      const FORMAT_HINTS = {
+        mp4: "MP4 — best for sharing. Keeps audio. Rendered in real time.",
+        webm: "WebM — open format, smaller files. Keeps audio. Rendered in real time.",
+        gif: "GIF — looping, no audio. Capped to 800px / 15fps for a sane file size.",
+        webp: "Animated WebP — looping, no audio. Smaller & sharper than GIF.",
+      };
+
+      // GIF/WebP encode from still frames; cap size + frame rate so memory and
+      // file size stay reasonable.
+      const GIF_MAX_LONG = 800;
+      const WEBP_MAX_LONG = 1000;
+      const ANIM_FPS = 15;
+      const ANIM_MAX_FRAMES = 450; // ~30s at 15fps; fps drops if a trim exceeds this
+      const ENCODED_MAX_LONG = 1920; // mp4/webm long-side cap
+
+      /* ───────────────────────── State ───────────────────────── */
+      const state = {
+        bgMode: "gradient",
+        gradientId: "indigo",
+        gradientCustom: { angle: 135, c0: "#6366f1", c1: "#9333ea" },
+        wallpaperId: "aurora",
+        solidColor: "#6366f1",
+        customImage: null,
+        frame: "window",
+        frameTheme: "light",
+        url: "app.example.com",
+        padPct: 0.08,
+        radiusPct: 0.018,
+        shadowPct: 0.05,
+        aspect: "auto",
+        format: "mp4",
+        muted: false,
+        loop: true,
+        trimIn: 0,
+        trimOut: 0,
+      };
+
+      const video = document.getElementById("srcVideo");
+      let imgW = 0, imgH = 0;
+      let duration = 0;
+      let videoReady = false;
+      let exporting = false;
+      let blobUrl = null;
+
+      let savedGradients = [];
+
+      const previewArea = document.getElementById("previewArea");
+      const previewCanvas = document.getElementById("previewCanvas");
+      const previewCtx = previewCanvas.getContext("2d");
+
+      /* ───────────────────────── Color helpers ───────────────────────── */
+      function hexToRgb(hex) {
+        let h = hex.replace("#", "");
+        if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+        const n = parseInt(h, 16);
+        return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+      }
+      function rgba(hex, a) {
+        const { r, g, b } = hexToRgb(hex);
+        return `rgba(${r},${g},${b},${a})`;
+      }
+
+      function buildCustomGradient() {
+        const c = state.gradientCustom;
+        return { id: "custom", angle: c.angle, stops: [[0, c.c0], [1, c.c1]] };
+      }
+      function gradientFromSaved(g) {
+        return { id: g.id, angle: g.angle, stops: [[0, g.c0], [1, g.c1]] };
+      }
+      function currentGradient() {
+        if (state.gradientId === "custom") return buildCustomGradient();
+        const preset = GRADIENTS.find((p) => p.id === state.gradientId);
+        if (preset) return preset;
+        const saved = savedGradients.find((g) => g.id === state.gradientId);
+        if (saved) return gradientFromSaved(saved);
+        return GRADIENTS[0];
+      }
+
+      /* ───────────────────────── Background rendering ───────────────────────── */
+      function paintBackground(ctx, w, h) {
+        if (state.bgMode === "solid") {
+          ctx.fillStyle = state.solidColor;
+          ctx.fillRect(0, 0, w, h);
+          return;
+        }
+        if (state.bgMode === "image" && state.customImage) {
+          drawCover(ctx, state.customImage, 0, 0, w, h);
+          return;
+        }
+        if (state.bgMode === "wallpaper") {
+          const wp = WALLPAPERS.find((p) => p.id === state.wallpaperId) || WALLPAPERS[0];
+          ctx.fillStyle = wp.base;
+          ctx.fillRect(0, 0, w, h);
+          const max = Math.max(w, h);
+          ctx.save();
+          ctx.globalCompositeOperation = wp.blend === "lighter" ? "lighter" : "source-over";
+          for (const b of wp.blobs) {
+            const cx = b.x * w, cy = b.y * h, rad = b.r * max;
+            const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+            g.addColorStop(0, rgba(b.c, wp.blend === "lighter" ? 0.85 : 0.9));
+            g.addColorStop(1, rgba(b.c, 0));
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, w, h);
+          }
+          ctx.restore();
+          return;
+        }
+        const gr = currentGradient();
+        const rad = (gr.angle * Math.PI) / 180;
+        const cx = w / 2, cy = h / 2;
+        const dx = Math.cos(rad), dy = Math.sin(rad);
+        const half = (Math.abs(w * dx) + Math.abs(h * dy)) / 2;
+        const g = ctx.createLinearGradient(cx - dx * half, cy - dy * half, cx + dx * half, cy + dy * half);
+        for (const [pos, color] of gr.stops) g.addColorStop(pos, color);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+      }
+
+      function drawCover(ctx, img, x, y, w, h) {
+        const iw = img.naturalWidth || img.width;
+        const ih = img.naturalHeight || img.height;
+        if (!iw || !ih) return;
+        const scale = Math.max(w / iw, h / ih);
+        const dw = iw * scale, dh = ih * scale;
+        ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+      }
+
+      /* ───────────────────────── Layout ───────────────────────── */
+      function layout() {
+        const baseDim = Math.max(imgW, imgH) || 1;
+        const pad = state.padPct * baseDim;
+        const radius = state.radiusPct * baseDim;
+        const headerH = state.frame === "browser" ? Math.max(34, baseDim * 0.045) : 0;
+        const frameW = imgW;
+        const frameH = imgH + headerH;
+        const paddedW = frameW + pad * 2;
+        const paddedH = frameH + pad * 2;
+        let sceneW = paddedW, sceneH = paddedH;
+        const ar = ASPECTS[state.aspect];
+        if (ar) {
+          if (paddedW / paddedH < ar) sceneW = paddedH * ar;
+          else sceneH = paddedW / ar;
+        }
+        return {
+          baseDim, pad, radius, headerH, frameW, frameH, sceneW, sceneH,
+          frameX: (sceneW - frameW) / 2,
+          frameY: (sceneH - frameH) / 2,
+        };
+      }
+
+      /* ───────────────────────── Scene rendering ───────────────────────── */
+      // Paints the whole composition in natural pixels. The caller sets the
+      // transform first (uniform for preview, near-uniform for export), so this
+      // is resolution-independent.
+      function paintScene(ctx, L) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.clearRect(0, 0, L.sceneW, L.sceneH);
+
+        paintBackground(ctx, L.sceneW, L.sceneH);
+
+        const r = Math.min(L.radius, L.frameW / 2, L.frameH / 2);
+
+        if (state.shadowPct > 0) {
+          ctx.save();
+          ctx.shadowColor = `rgba(0,0,0,${0.35})`;
+          ctx.shadowBlur = state.shadowPct * L.baseDim;
+          ctx.shadowOffsetY = state.shadowPct * L.baseDim * 0.45;
+          ctx.beginPath();
+          ctx.roundRect(L.frameX, L.frameY, L.frameW, L.frameH, r);
+          ctx.fillStyle = "#ffffff";
+          ctx.fill();
+          ctx.restore();
+        }
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(L.frameX, L.frameY, L.frameW, L.frameH, r);
+        ctx.clip();
+
+        if (state.frame === "browser") {
+          const dark = state.frameTheme === "dark";
+          ctx.fillStyle = dark ? "#2b2b30" : "#f6f6f7";
+          ctx.fillRect(L.frameX, L.frameY, L.frameW, L.headerH);
+          drawBrowserChrome(ctx, L, dark);
+          drawVideoFrame(ctx, L.frameX, L.frameY + L.headerH);
+        } else {
+          drawVideoFrame(ctx, L.frameX, L.frameY);
+        }
+        ctx.restore();
+
+        if (state.frame === "window" || state.frame === "browser") {
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(L.frameX, L.frameY, L.frameW, L.frameH, r);
+          ctx.lineWidth = Math.max(1, L.baseDim * 0.0012);
+          ctx.strokeStyle = "rgba(0,0,0,0.12)";
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      // Draw the current video frame at natural size. Guarded so it never throws
+      // before the first decoded frame is available.
+      function drawVideoFrame(ctx, x, y) {
+        if (!videoReady || video.readyState < 2) {
+          ctx.fillStyle = "#000";
+          ctx.fillRect(x, y, imgW, imgH);
+          return;
+        }
+        try {
+          ctx.drawImage(video, x, y, imgW, imgH);
+        } catch (e) {
+          ctx.fillStyle = "#000";
+          ctx.fillRect(x, y, imgW, imgH);
+        }
+      }
+
+      function renderSceneScaled(ctx, sx, sy, L) {
+        ctx.setTransform(sx, 0, 0, sy, 0, 0);
+        paintScene(ctx, L);
+      }
+
+      function drawBrowserChrome(ctx, L, dark) {
+        const hY = L.frameY + L.headerH / 2;
+        const dotR = Math.max(3, L.headerH * 0.11);
+        const startX = L.frameX + L.headerH * 0.6;
+        const gap = dotR * 3.2;
+        const dotColors = ["#ff5f57", "#febc2e", "#28c840"];
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath();
+          ctx.arc(startX + i * gap, hY, dotR, 0, Math.PI * 2);
+          ctx.fillStyle = dotColors[i];
+          ctx.fill();
+        }
+
+        const pillH = L.headerH * 0.52;
+        const pillW = Math.min(L.frameW * 0.55, L.frameW - (startX - L.frameX) * 2 - gap * 2);
+        if (pillW > pillH) {
+          const pillX = L.frameX + (L.frameW - pillW) / 2;
+          const pillY = hY - pillH / 2;
+          ctx.beginPath();
+          ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
+          ctx.fillStyle = dark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.05)";
+          ctx.fill();
+          if (state.url) {
+            const fs = Math.min(pillH * 0.5, L.headerH * 0.3);
+            ctx.font = `500 ${fs}px -apple-system, "Segoe UI", system-ui, sans-serif`;
+            ctx.fillStyle = dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(state.url, pillX + pillW / 2, hY + fs * 0.05, pillW * 0.9);
+            ctx.textAlign = "start";
+          }
+        }
+      }
+
+      /* ───────────────────────── Preview loop ───────────────────────── */
+      let needsPaint = true;
+      let rafId = null;
+
+      function requestPaint() {
+        needsPaint = true;
+        ensureLoop();
+      }
+      function ensureLoop() {
+        if (rafId == null) rafId = requestAnimationFrame(loopTick);
+      }
+      function loopTick() {
+        rafId = null;
+        // Export drives the video + a dedicated draw loop; stay out of its way.
+        if (exporting) return;
+        const playing = videoReady && !video.paused && !video.ended;
+        if (playing) {
+          enforceTrim();
+          needsPaint = true;
+        }
+        if (needsPaint && !exporting) {
+          renderPreview();
+          updateTransport();
+          needsPaint = false;
+        }
+        if ((videoReady && !video.paused && !video.ended) || needsPaint) ensureLoop();
+      }
+
+      function renderPreview() {
+        if (!imgW || !imgH) return;
+        const L = layout();
+        const dpr = window.devicePixelRatio || 1;
+        const areaRect = previewArea.getBoundingClientRect();
+        const pad = 36;
+        const availW = Math.max(50, areaRect.width - pad * 2);
+        const availH = Math.max(50, areaRect.height - pad * 2);
+        const fit = Math.min(availW / L.sceneW, availH / L.sceneH);
+        const dispW = L.sceneW * fit;
+        const dispH = L.sceneH * fit;
+        previewCanvas.style.width = dispW + "px";
+        previewCanvas.style.height = dispH + "px";
+        previewCanvas.width = Math.max(1, Math.round(dispW * dpr));
+        previewCanvas.height = Math.max(1, Math.round(dispH * dpr));
+        renderSceneScaled(previewCtx, fit * dpr, fit * dpr, L);
+      }
+
+      /* ───────────────────────── Playback + trim ───────────────────────── */
+      const playBtn = document.getElementById("playBtn");
+      const playIcon = document.getElementById("playIcon");
+      const timeLabel = document.getElementById("timeLabel");
+      const timeline = document.getElementById("timeline");
+      const trackSel = document.getElementById("trackSel");
+      const playhead = document.getElementById("playhead");
+      const handleIn = document.getElementById("handleIn");
+      const handleOut = document.getElementById("handleOut");
+      const PLAY_ICON = '<polygon points="7,4 20,12 7,20"/>';
+      const PAUSE_ICON = '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>';
+
+      function fmtTime(t) {
+        if (!isFinite(t)) t = 0;
+        const m = Math.floor(t / 60);
+        const s = Math.floor(t % 60);
+        return m + ":" + String(s).padStart(2, "0");
+      }
+
+      function pct(t) { return duration > 0 ? (t / duration) * 100 : 0; }
+
+      function updateTransport() {
+        const cur = videoReady ? video.currentTime : 0;
+        playhead.style.left = pct(cur) + "%";
+        trackSel.style.left = pct(state.trimIn) + "%";
+        trackSel.style.width = Math.max(0, pct(state.trimOut) - pct(state.trimIn)) + "%";
+        handleIn.style.left = pct(state.trimIn) + "%";
+        handleOut.style.left = pct(state.trimOut) + "%";
+        timeLabel.innerHTML = "<b>" + fmtTime(cur) + "</b> / " + fmtTime(duration);
+        playIcon.innerHTML = (videoReady && !video.paused && !video.ended) ? PAUSE_ICON : PLAY_ICON;
+      }
+
+      // Keep playback inside [trimIn, trimOut]; loop or pause at the out point.
+      function enforceTrim() {
+        if (!videoReady) return;
+        if (video.currentTime < state.trimIn - 0.05) video.currentTime = state.trimIn;
+        if (video.currentTime >= state.trimOut - 0.001) {
+          if (state.loop) {
+            video.currentTime = state.trimIn;
+          } else {
+            video.pause();
+            video.currentTime = state.trimOut;
+            requestPaint();
+          }
+        }
+      }
+
+      function togglePlay() {
+        if (!videoReady || exporting) return;
+        if (video.paused || video.ended) {
+          if (video.currentTime >= state.trimOut - 0.001) video.currentTime = state.trimIn;
+          ensureAudioGraph();
+          video.play().catch(() => {});
+        } else {
+          video.pause();
+        }
+        requestPaint();
+      }
+      playBtn.addEventListener("click", togglePlay);
+
+      // Seek to a time, repaint once when paused.
+      function seekPreview(t) {
+        if (!videoReady) return;
+        video.currentTime = Math.max(0, Math.min(duration, t));
+        requestPaint();
+      }
+
+      // Timeline pointer interactions: drag handles to trim, drag elsewhere to
+      // scrub the playhead.
+      function timeFromClientX(clientX) {
+        const rect = timeline.getBoundingClientRect();
+        const f = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        return f * duration;
+      }
+
+      let dragMode = null; // "in" | "out" | "seek"
+      function onTimelineDown(e) {
+        if (!videoReady || exporting) return;
+        if (e.target === handleIn) dragMode = "in";
+        else if (e.target === handleOut) dragMode = "out";
+        else dragMode = "seek";
+        timeline.setPointerCapture(e.pointerId);
+        onTimelineMove(e);
+      }
+      function onTimelineMove(e) {
+        if (!dragMode) return;
+        const t = timeFromClientX(e.clientX);
+        const minGap = Math.min(0.3, duration * 0.02);
+        if (dragMode === "in") {
+          state.trimIn = Math.max(0, Math.min(t, state.trimOut - minGap));
+          seekPreview(state.trimIn);
+        } else if (dragMode === "out") {
+          state.trimOut = Math.min(duration, Math.max(t, state.trimIn + minGap));
+          seekPreview(state.trimOut);
+        } else {
+          seekPreview(t);
+        }
+        updateTransport();
+      }
+      function onTimelineUp(e) {
+        dragMode = null;
+        try { timeline.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
+      timeline.addEventListener("pointerdown", onTimelineDown);
+      timeline.addEventListener("pointermove", onTimelineMove);
+      timeline.addEventListener("pointerup", onTimelineUp);
+      timeline.addEventListener("pointercancel", onTimelineUp);
+
+      const loopBtn = document.getElementById("loopBtn");
+      loopBtn.classList.toggle("active", state.loop);
+      loopBtn.addEventListener("click", () => {
+        if (exporting) return;
+        state.loop = !state.loop;
+        loopBtn.classList.toggle("active", state.loop);
+      });
+
+      /* ───────────────────────── Audio graph ───────────────────────── */
+      // Built lazily on first play (needs a user gesture). source → gainMute →
+      // { monitorGain → speakers, audioDest → export tap }.
+      let audioCtx = null, gainMute = null, monitorGain = null, audioDest = null, audioGraphFailed = false;
+      function ensureAudioGraph() {
+        if (audioCtx || audioGraphFailed) {
+          if (audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+          return;
+        }
+        try {
+          audioCtx = new AudioContext();
+          const srcNode = audioCtx.createMediaElementSource(video);
+          gainMute = audioCtx.createGain();
+          monitorGain = audioCtx.createGain();
+          audioDest = audioCtx.createMediaStreamDestination();
+          srcNode.connect(gainMute);
+          gainMute.connect(monitorGain);
+          monitorGain.connect(audioCtx.destination);
+          gainMute.connect(audioDest);
+          gainMute.gain.value = state.muted ? 0 : 1;
+          monitorGain.gain.value = 1;
+        } catch (e) {
+          audioGraphFailed = true;
+          video.muted = state.muted; // best-effort fallback
+        }
+      }
+      function applyMute() {
+        if (gainMute) gainMute.gain.value = state.muted ? 0 : 1;
+        else video.muted = state.muted;
+      }
+      const muteBtn = document.getElementById("muteBtn");
+      function refreshMuteBtn() {
+        muteBtn.classList.toggle("muted", state.muted);
+        muteBtn.title = state.muted ? "Audio muted in export — click to keep audio" : "Mute audio in the export";
+      }
+      muteBtn.addEventListener("click", () => {
+        if (exporting) return;
+        state.muted = !state.muted;
+        applyMute();
+        refreshMuteBtn();
+      });
+      refreshMuteBtn();
+
+      /* ───────────────────────── Swatch UI ───────────────────────── */
+      function gradientCss(gr) {
+        const stops = gr.stops.map(([p, c]) => `${c} ${Math.round(p * 100)}%`).join(", ");
+        return `linear-gradient(${gr.angle}deg, ${stops})`;
+      }
+      function wallpaperCss(wp) {
+        const layers = wp.blobs.map((b) =>
+          `radial-gradient(circle at ${Math.round(b.x * 100)}% ${Math.round(b.y * 100)}%, ${b.c} 0%, transparent ${Math.round(b.r * 55)}%)`
+        );
+        return `${layers.join(", ")}, ${wp.base}`;
+      }
+
+      function buildSwatches(container, presets, css, getId, setId, onSelect) {
+        container.innerHTML = "";
+        for (const p of presets) {
+          const el = document.createElement("div");
+          el.className = "swatch" + (getId() === p.id ? " active" : "");
+          el.style.background = css(p);
+          el.dataset.id = p.id;
+          el.addEventListener("click", () => {
+            setId(p.id);
+            container.querySelectorAll(".swatch").forEach((s) => s.classList.toggle("active", s.dataset.id === p.id));
+            if (onSelect) onSelect(p.id);
+            requestPaint();
+          });
+          container.appendChild(el);
+        }
+      }
+
+      const gradientContainer = document.getElementById("gradientSwatches");
+      const gradientCustomPanel = document.getElementById("gradientCustomPanel");
+      const MAX_SAVED_GRADIENTS = 24;
+
+      let gradSeq = 0;
+      function gradientUid() { return "g" + Date.now().toString(36) + "-" + (gradSeq++); }
+      function gradientKey(angle, c0, c1) { return angle + "|" + c0 + "|" + c1; }
+
+      function updateGradientCustomVisibility() {
+        const show = state.bgMode === "gradient" && state.gradientId === "custom";
+        gradientCustomPanel.classList.toggle("hidden", !show);
+      }
+      function refreshCustomSwatch() {
+        const el = gradientContainer.querySelector(".swatch.custom");
+        if (el) el.style.background = gradientCss(buildCustomGradient());
+      }
+      function setActiveGradient(id) {
+        state.gradientId = id;
+        gradientContainer.querySelectorAll(".swatch").forEach((s) => s.classList.toggle("active", s.dataset.id === id));
+      }
+
+      function makeGradientSwatch(id, background, removeId) {
+        const el = document.createElement("div");
+        el.className = "swatch" + (state.gradientId === id ? " active" : "");
+        el.style.background = background;
+        el.dataset.id = id;
+        el.addEventListener("click", () => {
+          setActiveGradient(id);
+          updateGradientCustomVisibility();
+          requestPaint();
+        });
+        if (removeId) {
+          const rm = document.createElement("div");
+          rm.className = "remove";
+          rm.textContent = "×";
+          rm.title = "Remove from palette";
+          rm.addEventListener("click", (e) => { e.stopPropagation(); removeSavedGradient(removeId); });
+          el.appendChild(rm);
+        }
+        return el;
+      }
+
+      function renderGradientSwatches() {
+        gradientContainer.innerHTML = "";
+        for (const p of GRADIENTS) {
+          gradientContainer.appendChild(makeGradientSwatch(p.id, gradientCss(p), null));
+        }
+        for (const g of savedGradients) {
+          gradientContainer.appendChild(makeGradientSwatch(g.id, gradientCss(gradientFromSaved(g)), g.id));
+        }
+        const customEl = document.createElement("div");
+        customEl.className = "swatch custom" + (state.gradientId === "custom" ? " active" : "");
+        customEl.dataset.id = "custom";
+        customEl.title = "Custom gradient";
+        customEl.style.background = gradientCss(buildCustomGradient());
+        customEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+        customEl.addEventListener("click", () => {
+          setActiveGradient("custom");
+          updateGradientCustomVisibility();
+          requestPaint();
+        });
+        gradientContainer.appendChild(customEl);
+      }
+
+      function persistGradients() {
+        window.videoStudio.saveGradients(savedGradients.map((g) => ({ angle: g.angle, c0: g.c0, c1: g.c1 })));
+      }
+      function addSavedGradient() {
+        const c0 = normHex(state.gradientCustom.c0);
+        const c1 = normHex(state.gradientCustom.c1);
+        if (!c0 || !c1) return;
+        const angle = ((Math.round(state.gradientCustom.angle) % 360) + 360) % 360;
+        const key = gradientKey(angle, c0, c1);
+        if (savedGradients.some((g) => gradientKey(g.angle, g.c0, g.c1) === key)) return;
+        savedGradients.unshift({ id: gradientUid(), angle, c0, c1 });
+        if (savedGradients.length > MAX_SAVED_GRADIENTS) savedGradients = savedGradients.slice(0, MAX_SAVED_GRADIENTS);
+        persistGradients();
+        renderGradientSwatches();
+      }
+      function removeSavedGradient(id) {
+        savedGradients = savedGradients.filter((g) => g.id !== id);
+        persistGradients();
+        if (state.gradientId === id) { state.gradientId = "indigo"; requestPaint(); }
+        renderGradientSwatches();
+      }
+      document.getElementById("saveGradientBtn").addEventListener("click", addSavedGradient);
+
+      renderGradientSwatches();
+
+      window.videoStudio.getGradients().then((list) => {
+        if (!Array.isArray(list)) return;
+        savedGradients = list.map((g) => {
+          const c0 = normHex(g && g.c0);
+          const c1 = normHex(g && g.c1);
+          if (!c0 || !c1) return null;
+          let angle = Number(g && g.angle);
+          if (!Number.isFinite(angle)) angle = 135;
+          angle = ((Math.round(angle) % 360) + 360) % 360;
+          return { id: gradientUid(), angle, c0, c1 };
+        }).filter(Boolean).slice(0, MAX_SAVED_GRADIENTS);
+        renderGradientSwatches();
+      }).catch(() => {});
+
+      const gradAngle = document.getElementById("gradAngle");
+      const gradAngleValue = document.getElementById("gradAngleValue");
+      function bindGradientColor(colorId, hexId, key) {
+        const colorEl = document.getElementById(colorId);
+        const hexEl = document.getElementById(hexId);
+        colorEl.addEventListener("input", () => {
+          state.gradientCustom[key] = colorEl.value;
+          hexEl.value = colorEl.value.toUpperCase();
+          refreshCustomSwatch();
+          requestPaint();
+        });
+        hexEl.addEventListener("input", () => {
+          const v = hexEl.value.trim();
+          if (/^#?[0-9a-fA-F]{6}$/.test(v)) {
+            const hex = v.startsWith("#") ? v : "#" + v;
+            state.gradientCustom[key] = hex;
+            colorEl.value = hex;
+            refreshCustomSwatch();
+            requestPaint();
+          }
+        });
+      }
+      bindGradientColor("gradC0", "gradC0Hex", "c0");
+      bindGradientColor("gradC1", "gradC1Hex", "c1");
+      gradAngle.addEventListener("input", () => {
+        state.gradientCustom.angle = +gradAngle.value;
+        gradAngleValue.textContent = gradAngle.value + "°";
+        refreshCustomSwatch();
+        requestPaint();
+      });
+
+      buildSwatches(
+        document.getElementById("wallpaperSwatches"), WALLPAPERS, wallpaperCss,
+        () => state.wallpaperId, (id) => { state.wallpaperId = id; }
+      );
+
+      /* ───────────────────────── Background tabs ───────────────────────── */
+      const bgPanels = {
+        gradient: document.getElementById("gradientSwatches"),
+        wallpaper: document.getElementById("wallpaperSwatches"),
+        solid: document.getElementById("solidPanel"),
+        image: document.getElementById("imagePanel"),
+      };
+      function setBgMode(mode) {
+        state.bgMode = mode;
+        document.querySelectorAll("#bgTabs .seg").forEach((b) => b.classList.toggle("active", b.dataset.bg === mode));
+        for (const key in bgPanels) bgPanels[key].classList.toggle("hidden", key !== mode);
+        updateGradientCustomVisibility();
+        requestPaint();
+      }
+      document.querySelectorAll("#bgTabs .seg").forEach((b) => {
+        b.addEventListener("click", () => setBgMode(b.dataset.bg));
+      });
+
+      /* ───────────────────────── Solid color + saved palette ───────────────────────── */
+      const solidColor = document.getElementById("solidColor");
+      const solidHex = document.getElementById("solidHex");
+      const solidPalette = document.getElementById("solidPalette");
+      const MAX_SAVED_COLORS = 24;
+      let savedColors = [];
+
+      function normHex(v) {
+        const s = String(v == null ? "" : v).trim();
+        if (!/^#?[0-9a-fA-F]{6}$/.test(s)) return null;
+        return (s.startsWith("#") ? s : "#" + s).toUpperCase();
+      }
+
+      function renderPalette() {
+        solidPalette.innerHTML = "";
+        const current = normHex(state.solidColor);
+        for (const hex of savedColors) {
+          const el = document.createElement("div");
+          el.className = "pal" + (hex === current ? " active" : "");
+          el.style.background = hex;
+          el.dataset.hex = hex;
+          el.title = hex;
+          el.addEventListener("click", () => applySolid(hex, false));
+          const rm = document.createElement("div");
+          rm.className = "remove";
+          rm.textContent = "×";
+          rm.title = "Remove from palette";
+          rm.addEventListener("click", (e) => { e.stopPropagation(); removeSavedColor(hex); });
+          el.appendChild(rm);
+          solidPalette.appendChild(el);
+        }
+      }
+      function persistColors() { window.videoStudio.saveColors(savedColors); }
+      function addSavedColor(value) {
+        const hex = normHex(value);
+        if (!hex) return;
+        savedColors = savedColors.filter((c) => c !== hex);
+        savedColors.unshift(hex);
+        if (savedColors.length > MAX_SAVED_COLORS) savedColors = savedColors.slice(0, MAX_SAVED_COLORS);
+        persistColors();
+        renderPalette();
+      }
+      function removeSavedColor(hex) {
+        savedColors = savedColors.filter((c) => c !== hex);
+        persistColors();
+        renderPalette();
+      }
+      function applySolid(value, addToPalette) {
+        const hex = normHex(value);
+        if (!hex) return;
+        state.solidColor = hex;
+        solidColor.value = hex;
+        solidHex.value = hex;
+        if (addToPalette) addSavedColor(hex);
+        else renderPalette();
+        requestPaint();
+      }
+      solidColor.addEventListener("input", () => {
+        state.solidColor = solidColor.value;
+        solidHex.value = solidColor.value.toUpperCase();
+        renderPalette();
+        requestPaint();
+      });
+      solidHex.addEventListener("input", () => {
+        const hex = normHex(solidHex.value);
+        if (hex) {
+          state.solidColor = hex;
+          solidColor.value = hex;
+          renderPalette();
+          requestPaint();
+        }
+      });
+      solidColor.addEventListener("change", () => addSavedColor(solidColor.value));
+      solidHex.addEventListener("change", () => addSavedColor(solidHex.value));
+
+      window.videoStudio.getColors().then((colors) => {
+        if (Array.isArray(colors)) {
+          savedColors = colors.map(normHex).filter(Boolean).slice(0, MAX_SAVED_COLORS);
+          renderPalette();
+        }
+      }).catch(() => {});
+
+      /* ───────────────────────── Image upload ───────────────────────── */
+      const fileInput = document.getElementById("fileInput");
+      const uploadBtn = document.getElementById("uploadBtn");
+      const uploadLabel = document.getElementById("uploadLabel");
+      uploadBtn.addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const im = new Image();
+          im.onload = () => {
+            state.customImage = im;
+            uploadBtn.classList.add("has-image");
+            uploadLabel.textContent = file.name.length > 24 ? file.name.slice(0, 22) + "…" : file.name;
+            requestPaint();
+          };
+          im.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      /* ───────────────────────── Frame tabs ───────────────────────── */
+      const browserOptions = document.getElementById("browserOptions");
+      document.querySelectorAll("#frameTabs .seg").forEach((b) => {
+        b.addEventListener("click", () => {
+          state.frame = b.dataset.frame;
+          document.querySelectorAll("#frameTabs .seg").forEach((s) => s.classList.toggle("active", s === b));
+          browserOptions.classList.toggle("hidden", state.frame !== "browser");
+          requestPaint();
+        });
+      });
+      document.querySelectorAll("#frameThemeTabs .seg").forEach((b) => {
+        b.addEventListener("click", () => {
+          state.frameTheme = b.dataset.theme;
+          document.querySelectorAll("#frameThemeTabs .seg").forEach((s) => s.classList.toggle("active", s === b));
+          requestPaint();
+        });
+      });
+      const urlInput = document.getElementById("urlInput");
+      urlInput.addEventListener("input", () => { state.url = urlInput.value; requestPaint(); });
+
+      /* ───────────────────────── Aspect ───────────────────────── */
+      document.querySelectorAll("#aspectTabs .seg").forEach((b) => {
+        b.addEventListener("click", () => {
+          state.aspect = b.dataset.aspect;
+          document.querySelectorAll("#aspectTabs .seg").forEach((s) => s.classList.toggle("active", s === b));
+          requestPaint();
+        });
+      });
+
+      /* ───────────────────────── Sliders ───────────────────────── */
+      function bindSlider(rangeId, valueId, apply) {
+        const range = document.getElementById(rangeId);
+        const value = document.getElementById(valueId);
+        range.addEventListener("input", () => {
+          value.textContent = range.value;
+          apply(range.value / 100);
+          requestPaint();
+        });
+      }
+      bindSlider("padRange", "padValue", (f) => { state.padPct = f * 0.25; });
+      bindSlider("radiusRange", "radiusValue", (f) => { state.radiusPct = f * 0.05; });
+      bindSlider("shadowRange", "shadowValue", (f) => { state.shadowPct = f * 0.12; });
+
+      /* ───────────────────────── Format tabs ───────────────────────── */
+      const exportBtn = document.getElementById("exportBtn");
+      const formatHint = document.getElementById("formatHint");
+      function setFormat(f) {
+        state.format = f;
+        document.querySelectorAll("#formatTabs .seg").forEach((s) => s.classList.toggle("active", s.dataset.format === f));
+        formatHint.textContent = FORMAT_HINTS[f] || "";
+        exportBtn.textContent = "Export " + f.toUpperCase();
+      }
+      document.querySelectorAll("#formatTabs .seg").forEach((b) => {
+        b.addEventListener("click", () => setFormat(b.dataset.format));
+      });
+
+      /* ───────────────────────── Export helpers ───────────────────────── */
+      const progressOverlay = document.getElementById("progressOverlay");
+      const progressTitle = document.getElementById("progressTitle");
+      const progressFill = document.getElementById("progressFill");
+      const progressSub = document.getElementById("progressSub");
+      const cancelExportBtn = document.getElementById("cancelExportBtn");
+      let exportAbort = false;
+      let exportErrored = false;
+
+      function showProgress(title) {
+        exporting = true;
+        exportAbort = false;
+        exportErrored = false;
+        progressTitle.textContent = title;
+        progressFill.style.width = "0%";
+        progressSub.textContent = "0%";
+        progressFill.parentElement.style.visibility = "visible";
+        cancelExportBtn.textContent = "Cancel";
+        progressOverlay.classList.add("active");
+        exportBtn.disabled = true;
+        // Settings feed the live scene; lock them so a stray click can't alter
+        // frames mid-render.
+        document.querySelector(".sidebar").style.pointerEvents = "none";
+      }
+      function setProgress(frac) {
+        const p = Math.max(0, Math.min(100, Math.round(frac * 100)));
+        progressFill.style.width = p + "%";
+        progressSub.textContent = p + "%";
+      }
+      function hideProgress() {
+        exporting = false;
+        exportErrored = false;
+        progressOverlay.classList.remove("active");
+        exportBtn.disabled = false;
+        document.querySelector(".sidebar").style.pointerEvents = "";
+        requestPaint();
+      }
+      // Keep the overlay up showing an error until the user dismisses it.
+      function showExportError(msg) {
+        exportErrored = true;
+        progressTitle.textContent = msg || "Export failed.";
+        progressFill.parentElement.style.visibility = "hidden";
+        progressSub.textContent = "";
+        cancelExportBtn.textContent = "Close";
+        progressOverlay.classList.add("active");
+        exportBtn.disabled = false;
+      }
+      cancelExportBtn.addEventListener("click", () => {
+        if (exportErrored) hideProgress();
+        else exportAbort = true;
+      });
+
+      // Even-dimension export canvas scaled to fit `maxLong`, drawn at 1:1 scene.
+      function makeExportCanvas(maxLong, forceEven) {
+        const L = layout();
+        const longSide = Math.max(L.sceneW, L.sceneH);
+        const scale = Math.min(1, maxLong / longSide);
+        let w = Math.max(2, Math.round(L.sceneW * scale));
+        let h = Math.max(2, Math.round(L.sceneH * scale));
+        if (forceEven) { w -= w % 2; h -= h % 2; }
+        const cvs = document.createElement("canvas");
+        cvs.width = w; cvs.height = h;
+        const ctx = cvs.getContext("2d", { alpha: false });
+        return { cvs, ctx, w, h, L };
+      }
+
+      // Composited thumbnail (PNG data URL) for the preview card.
+      function captureThumbnail() {
+        const { cvs, ctx, w, h, L } = makeExportCanvas(600, false);
+        renderSceneScaled(ctx, w / L.sceneW, h / L.sceneH, L);
+        try { return cvs.toDataURL("image/png"); } catch (e) { return null; }
+      }
+
+      function awaitSeek(t) {
+        return new Promise((resolve) => {
+          let done = false;
+          const finish = () => { if (done) return; done = true; video.removeEventListener("seeked", finish); resolve(); };
+          video.addEventListener("seeked", finish);
+          video.currentTime = t;
+          // Safety: some seeks within the same frame don't fire 'seeked'.
+          setTimeout(finish, 400);
+        });
+      }
+      function blobToBytes(blob) {
+        return blob.arrayBuffer().then((buf) => new Uint8Array(buf));
+      }
+      function canvasToPngBytes(cvs) {
+        return new Promise((resolve, reject) => {
+          cvs.toBlob((b) => { if (b) blobToBytes(b).then(resolve); else reject(new Error("toBlob failed")); }, "image/png");
+        });
+      }
+
+      /* ── Real-time encoded export (mp4 / webm) ── */
+      function pickMime(format, hasAudio) {
+        if (format === "webm") return hasAudio ? "video/webm;codecs=vp9,opus" : "video/webm;codecs=vp9";
+        const t = hasAudio ? "video/mp4;codecs=avc1,mp4a.40.2" : "video/mp4;codecs=avc1";
+        if (MediaRecorder.isTypeSupported(t)) return t;
+        return hasAudio ? "video/webm;codecs=vp9,opus" : "video/webm;codecs=vp9";
+      }
+
+      function exportEncoded(format) {
+        const { cvs, ctx, w, h, L } = makeExportCanvas(ENCODED_MAX_LONG, true);
+        const sx = w / L.sceneW, sy = h / L.sceneH;
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, w, h);
+
+        const recStream = new MediaStream();
+        const canvasStream = cvs.captureStream(30);
+        canvasStream.getVideoTracks().forEach((t) => recStream.addTrack(t));
+
+        let usedAudio = false;
+        if (!state.muted) {
+          ensureAudioGraph();
+          if (audioDest) {
+            const tracks = audioDest.stream.getAudioTracks();
+            if (tracks.length) { recStream.addTrack(tracks[0]); usedAudio = true; }
+          }
+        }
+
+        const mimeType = pickMime(format, usedAudio);
+        const videoBitsPerSecond = Math.min(50000000, Math.max(8000000, Math.round(w * h * 30 * 0.15)));
+        let recorder;
+        try {
+          recorder = new MediaRecorder(recStream, { mimeType, videoBitsPerSecond });
+        } catch (e) {
+          console.error("MediaRecorder init failed:", e);
+          showExportError("This video format isn't supported on this system. Try WebM.");
+          return;
+        }
+
+        const chunks = [];
+        recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+
+        let drawId = null;
+        const ext = mimeType.indexOf("video/mp4") === 0 ? "mp4" : "webm";
+
+        function drawExportFrame() {
+          renderSceneScaled(ctx, sx, sy, L);
+          const span = Math.max(0.001, state.trimOut - state.trimIn);
+          setProgress((video.currentTime - state.trimIn) / span);
+          drawId = requestAnimationFrame(drawExportFrame);
+        }
+
+        function stopAll() {
+          if (drawId != null) cancelAnimationFrame(drawId);
+          drawId = null;
+          video.pause();
+          if (monitorGain) monitorGain.gain.value = 1;
+          video.onended = null;
+          video.ontimeupdate = null;
+        }
+
+        recorder.onstop = () => {
+          stopAll();
+          if (exportAbort) { hideProgress(); return; }
+          const thumb = captureThumbnail();
+          const blob = new Blob(chunks, { type: mimeType });
+          blobToBytes(blob).then((bytes) => {
+            window.videoStudio.exportEncoded(bytes, thumb, ext);
+          });
+        };
+
+        const onProgressCheck = () => {
+          if (exportAbort) { if (recorder.state !== "inactive") recorder.stop(); return; }
+          if (video.currentTime >= state.trimOut - 0.001) {
+            if (recorder.state !== "inactive") recorder.stop();
+          }
+        };
+
+        // Render from trimIn to trimOut once, no looping, with audio monitored
+        // silently so the export plays out in real time.
+        showProgress("Rendering " + ext.toUpperCase() + "…");
+        ensureAudioGraph();
+        if (monitorGain) monitorGain.gain.value = 0;
+        awaitSeek(state.trimIn).then(() => {
+          recorder.start(100);
+          drawExportFrame();
+          video.ontimeupdate = onProgressCheck;
+          video.onended = () => { if (recorder.state !== "inactive") recorder.stop(); };
+          video.play().catch(() => {});
+          // Watchdog in case timeupdate stops firing near the end.
+          const watch = setInterval(() => {
+            if (!exporting || recorder.state === "inactive") { clearInterval(watch); return; }
+            onProgressCheck();
+          }, 250);
+        });
+      }
+
+      /* ── Frame-stepped animated export (gif / webp) ── */
+      function exportAnimated(format) {
+        const maxLong = format === "gif" ? GIF_MAX_LONG : WEBP_MAX_LONG;
+        const span = Math.max(0.05, state.trimOut - state.trimIn);
+        let fps = ANIM_FPS;
+        let total = Math.max(1, Math.round(span * fps));
+        if (total > ANIM_MAX_FRAMES) {
+          fps = Math.max(5, Math.floor(ANIM_MAX_FRAMES / span));
+          total = Math.max(1, Math.round(span * fps));
+        }
+        const delay = Math.round(1000 / fps);
+        const { cvs, ctx, w, h, L } = makeExportCanvas(maxLong, false);
+        const sx = w / L.sceneW, sy = h / L.sceneH;
+
+        showProgress("Rendering " + format.toUpperCase() + "…");
+        video.pause();
+
+        const frames = [];
+        let i = 0;
+        function step() {
+          if (exportAbort) { hideProgress(); return; }
+          if (i >= total) {
+            const thumb = captureThumbnail();
+            window.videoStudio.exportFrames({
+              frames, delays: frames.map(() => delay),
+              width: w, height: h, format, thumbnailDataUrl: thumb,
+            });
+            return;
+          }
+          const t = Math.min(state.trimOut - 0.001, state.trimIn + (i / fps));
+          awaitSeek(t).then(() => {
+            renderSceneScaled(ctx, sx, sy, L);
+            return canvasToPngBytes(cvs);
+          }).then((bytes) => {
+            frames.push(bytes);
+            i++;
+            setProgress(i / total);
+            // Yield to the event loop so the progress bar can paint.
+            setTimeout(step, 0);
+          }).catch(() => { i++; setTimeout(step, 0); });
+        }
+        step();
+      }
+
+      function startExport() {
+        if (!videoReady || exporting) return;
+        video.pause();
+        requestPaint();
+        if (state.format === "gif" || state.format === "webp") exportAnimated(state.format);
+        else exportEncoded(state.format);
+      }
+      exportBtn.addEventListener("click", startExport);
+
+      window.videoStudio.onExportDone(() => { /* main destroys the window */ });
+      window.videoStudio.onExportError((message) => {
+        showExportError(message || "Export failed.");
+      });
+
+      /* ───────────────────────── Actions / keys ───────────────────────── */
+      document.getElementById("cancelBtn").addEventListener("click", () => window.videoStudio.cancel());
+
+      document.addEventListener("keydown", (e) => {
+        if (e.target && e.target.tagName === "INPUT") {
+          if (e.key === "Escape") e.target.blur();
+          return;
+        }
+        if (exporting) {
+          if (e.key === "Escape") exportAbort = true;
+          return;
+        }
+        if (e.key === "Escape") { window.videoStudio.cancel(); return; }
+        if (e.key === " ") { e.preventDefault(); togglePlay(); return; }
+        if (e.key === "i" || e.key === "I") { state.trimIn = Math.min(video.currentTime, state.trimOut - 0.1); updateTransport(); return; }
+        if (e.key === "o" || e.key === "O") { state.trimOut = Math.max(video.currentTime, state.trimIn + 0.1); updateTransport(); return; }
+        if (e.key === "ArrowLeft") { seekPreview(video.currentTime - (e.shiftKey ? 1 : 1 / 30)); return; }
+        if (e.key === "ArrowRight") { seekPreview(video.currentTime + (e.shiftKey ? 1 : 1 / 30)); return; }
+        const mod = e.ctrlKey || e.metaKey;
+        if (mod && (e.key === "e" || e.key === "E")) { e.preventDefault(); startExport(); }
+      });
+
+      window.addEventListener("resize", requestPaint);
+      window.addEventListener("beforeunload", () => { if (blobUrl) URL.revokeObjectURL(blobUrl); });
+
+      /* ───────────────────────── Load video ───────────────────────── */
+      // MediaRecorder-produced WebM can report Infinity duration until fully
+      // scanned; force a finite duration before initializing the trim range.
+      function resolveDuration() {
+        return new Promise((resolve) => {
+          if (isFinite(video.duration) && video.duration > 0) { resolve(video.duration); return; }
+          const onUpdate = () => {
+            video.removeEventListener("timeupdate", onUpdate);
+            const d = video.duration;
+            video.currentTime = 0;
+            resolve(isFinite(d) && d > 0 ? d : 0);
+          };
+          video.addEventListener("timeupdate", onUpdate);
+          video.currentTime = 1e6; // seek past the end to force a duration scan
+        });
+      }
+
+      window.videoStudio.onLoad((data) => {
+        if (!data || !(data.videoBytes instanceof Uint8Array)) return;
+        const type = data.mimeType || "video/mp4";
+        const blob = new Blob([data.videoBytes], { type });
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        blobUrl = URL.createObjectURL(blob);
+
+        video.onloadedmetadata = () => {
+          imgW = video.videoWidth;
+          imgH = video.videoHeight;
+          resolveDuration().then((d) => {
+            duration = d || 0;
+            state.trimIn = 0;
+            state.trimOut = duration;
+            videoReady = true;
+            video.currentTime = 0;
+            requestPaint();
+            updateTransport();
+          });
+        };
+        video.onerror = () => console.error("Failed to load source video");
+        video.src = blobUrl;
+        video.load();
+      });
+    </script>
+  </body>
+</html>

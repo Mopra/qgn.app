@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("preview", {
   close: () => ipcRenderer.send("close-preview"),
   openFile: () => ipcRenderer.send("preview-open-file"),
   edit: () => ipcRenderer.send("preview-edit"),
+  studio: () => ipcRenderer.send("preview-studio"),
   copy: () => ipcRenderer.send("preview-copy"),
   startDrag: () => ipcRenderer.send("preview-start-drag"),
   pin: (pinned) => ipcRenderer.send("preview-pin", pinned),

@@ -134,6 +134,64 @@ function getRecordCountdown() {
   return Number.isFinite(v) && v >= 0 ? v : 3;
 }
 
+// Studio's saved solid-color palette. Seeded with a few defaults until the user
+// curates their own (any of these can be removed in the editor).
+const DEFAULT_STUDIO_COLORS = ["#6366F1", "#0F172A", "#FFFFFF", "#10B981", "#F43F5E", "#F59E0B"];
+const MAX_STUDIO_COLORS = 24;
+
+// Validate + de-duplicate a list of "#rrggbb" hex strings (case-insensitive),
+// capped to MAX_STUDIO_COLORS. Used both when reading and writing the palette.
+function sanitizeStudioColors(list) {
+  if (!Array.isArray(list)) return null;
+  const seen = new Set();
+  const clean = [];
+  for (const c of list) {
+    if (typeof c !== "string" || !/^#[0-9a-fA-F]{6}$/.test(c)) continue;
+    const upper = c.toUpperCase();
+    if (seen.has(upper)) continue;
+    seen.add(upper);
+    clean.push(upper);
+    if (clean.length >= MAX_STUDIO_COLORS) break;
+  }
+  return clean;
+}
+
+function getStudioColors() {
+  const cleaned = sanitizeStudioColors(loadSettings().studioColors);
+  // Distinguish "no palette saved yet" (use defaults) from "saved empty palette".
+  return cleaned === null ? DEFAULT_STUDIO_COLORS.slice() : cleaned;
+}
+
+const MAX_STUDIO_GRADIENTS = 24;
+
+// Validate + de-duplicate a list of custom gradients ({angle, c0, c1}),
+// capped to MAX_STUDIO_GRADIENTS. Angle is normalized to 0–359.
+function sanitizeStudioGradients(list) {
+  if (!Array.isArray(list)) return null;
+  const isHex = (c) => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c);
+  const seen = new Set();
+  const clean = [];
+  for (const g of list) {
+    if (!g || typeof g !== "object" || !isHex(g.c0) || !isHex(g.c1)) continue;
+    const c0 = g.c0.toUpperCase();
+    const c1 = g.c1.toUpperCase();
+    let angle = Number(g.angle);
+    if (!Number.isFinite(angle)) angle = 135;
+    angle = ((Math.round(angle) % 360) + 360) % 360;
+    const key = `${angle}|${c0}|${c1}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    clean.push({ angle, c0, c1 });
+    if (clean.length >= MAX_STUDIO_GRADIENTS) break;
+  }
+  return clean;
+}
+
+function getStudioGradients() {
+  const cleaned = sanitizeStudioGradients(loadSettings().studioGradients);
+  return cleaned === null ? [] : cleaned;
+}
+
 const defaultHotkeys = {
   capture: "CommandOrControl+Q",
   record: "CommandOrControl+Shift+Q",
@@ -240,6 +298,10 @@ let micDropdownWindow = null;
 let selectedMicId = "default";
 let annotationWindow = null;
 let annotationSourcePreview = null;
+let studioWindow = null;
+let studioSourcePreview = null;
+let videoStudioWindow = null;
+let videoStudioSource = null;
 let updateWindow = null;
 let welcomeWindow = null;
 let starWindow = null;
@@ -549,6 +611,25 @@ function annotateClipboard() {
   }
   const png = image.toPNG();
   openAnnotationEditor({
+    pngBuffer: new Uint8Array(png),
+    imgSize: image.getSize(),
+    window: null,
+    filePath: null,
+    isVideo: false,
+    pinnedImagePath: null,
+    fromClipboard: true,
+  });
+}
+
+// Open Studio on whatever image is currently on the clipboard.
+function studioClipboard() {
+  const image = clipboard.readImage();
+  if (image.isEmpty()) {
+    showErrorToast("No image on the clipboard to open in Studio");
+    return;
+  }
+  const png = image.toPNG();
+  openStudio({
     pngBuffer: new Uint8Array(png),
     imgSize: image.getSize(),
     window: null,
@@ -889,6 +970,144 @@ function openAnnotationEditor(previewEntry) {
   });
 }
 
+// Open the Studio editor — a larger workspace for composing the capture into a
+// framed mockup on a background. Unlike annotation, it produces a brand-new
+// image (different dimensions) rather than editing the source in place.
+function openStudio(previewEntry) {
+  if (studioWindow && !studioWindow.isDestroyed()) {
+    studioWindow.focus();
+    return;
+  }
+
+  const display = screen.getPrimaryDisplay();
+  const workArea = display.workArea;
+  const winW = Math.min(1280, Math.round(workArea.width * 0.92));
+  const winH = Math.round(workArea.height * 0.9);
+  const x = workArea.x + Math.round((workArea.width - winW) / 2);
+  const y = workArea.y + Math.round((workArea.height - winH) / 2);
+
+  studioWindow = new BrowserWindow({
+    width: winW,
+    height: winH,
+    minWidth: 900,
+    minHeight: 560,
+    x,
+    y,
+    frame: false,
+    backgroundColor: "#141414",
+    resizable: true,
+    skipTaskbar: false,
+    show: false,
+    webPreferences: secureWebPrefs("studio-preload.js"),
+  });
+
+  studioWindow.loadFile("studio.html");
+  studioSourcePreview = previewEntry || null;
+
+  studioWindow.once("ready-to-show", () => {
+    if (studioWindow.isDestroyed()) return;
+    studioWindow.show();
+    // Studio can be opened empty (the user imports an image inside) or seeded
+    // from a capture / clipboard image.
+    if (previewEntry && previewEntry.pngBuffer) {
+      const imageDataUrl = `data:image/png;base64,${Buffer.from(previewEntry.pngBuffer).toString("base64")}`;
+      studioWindow.webContents.send("load-image", { imageDataUrl });
+    }
+  });
+
+  studioWindow.on("closed", () => {
+    studioWindow = null;
+    studioSourcePreview = null;
+  });
+}
+
+// Map a video file extension to a MIME type for the renderer's Blob/<video>.
+function videoMimeForPath(filePath) {
+  const ext = path.extname(filePath || "").slice(1).toLowerCase();
+  if (ext === "webm") return "video/webm";
+  if (ext === "mov") return "video/quicktime";
+  if (ext === "mkv") return "video/x-matroska";
+  return "video/mp4";
+}
+
+// Open the Video Studio — the motion counterpart of Studio. It loads a recorded
+// clip, lets the user frame it on a background, trim it, and export a new
+// mp4/webm/gif/webp. Like Studio it produces a brand-new file, never edits the
+// source in place.
+function openVideoStudio(previewEntry) {
+  if (videoStudioWindow && !videoStudioWindow.isDestroyed()) {
+    videoStudioWindow.focus();
+    return;
+  }
+
+  const filePath = previewEntry && previewEntry.filePath;
+  if (!filePath || !fs.existsSync(filePath)) {
+    showErrorToast("Couldn't find the video file to edit");
+    return;
+  }
+
+  const display = screen.getPrimaryDisplay();
+  const workArea = display.workArea;
+  const winW = Math.min(1280, Math.round(workArea.width * 0.92));
+  const winH = Math.round(workArea.height * 0.9);
+  const x = workArea.x + Math.round((workArea.width - winW) / 2);
+  const y = workArea.y + Math.round((workArea.height - winH) / 2);
+
+  videoStudioWindow = new BrowserWindow({
+    width: winW,
+    height: winH,
+    minWidth: 900,
+    minHeight: 600,
+    x,
+    y,
+    frame: false,
+    backgroundColor: "#141414",
+    resizable: true,
+    skipTaskbar: false,
+    show: false,
+    webPreferences: secureWebPrefs("video-studio-preload.js", { backgroundThrottling: false }),
+  });
+
+  videoStudioWindow.loadFile("video-studio.html");
+  videoStudioSource = previewEntry;
+
+  videoStudioWindow.once("ready-to-show", () => {
+    if (videoStudioWindow.isDestroyed()) return;
+    videoStudioWindow.show();
+    let videoBytes;
+    try {
+      videoBytes = fs.readFileSync(filePath);
+    } catch (e) {
+      console.error("Failed to read source video:", e);
+      showErrorToast("Couldn't open the video in Studio");
+      if (!videoStudioWindow.isDestroyed()) videoStudioWindow.destroy();
+      return;
+    }
+    videoStudioWindow.webContents.send("load-video", {
+      videoBytes: new Uint8Array(videoBytes),
+      mimeType: videoMimeForPath(filePath),
+    });
+  });
+
+  videoStudioWindow.on("closed", () => {
+    videoStudioWindow = null;
+    videoStudioSource = null;
+  });
+}
+
+// Pick any existing video off disk and open it in the Video Studio (so clips
+// that have scrolled past their preview card can still be framed).
+async function openVideoFileInStudio() {
+  const result = await dialog.showOpenDialog({
+    title: "Open a video in Studio",
+    defaultPath: getSaveFolder(),
+    properties: ["openFile"],
+    filters: [{ name: "Video", extensions: ["mp4", "webm", "mov", "mkv", "m4v"] }],
+  });
+  if (result.canceled || !result.filePaths.length) return;
+  openVideoStudio({ filePath: result.filePaths[0], isVideo: true });
+}
+
 let videoSourceId = null;
 let videoScaleFactor = 1;
 let videoDisplaySize = { width: 0, height: 0 };
@@ -1075,28 +1294,34 @@ function stopRecordingUI() {
   isRecording = false;
 }
 
+// Write a video/animation buffer to the save folder and surface it the same way
+// a fresh recording is: a preview card (with its captured thumbnail) or a toast.
+// Shared by the recorder and the Video Studio. Returns the written path.
+function writeVideoFile(buffer, ext, thumbnailDataUrl) {
+  const folder = getSaveFolder();
+  fs.mkdirSync(folder, { recursive: true });
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const filePath = path.join(folder, `qgn-${timestamp}.${ext}`);
+  fs.writeFileSync(filePath, Buffer.from(buffer));
+
+  if (thumbnailDataUrl && /^data:image\/png;base64,/.test(thumbnailDataUrl)) {
+    const base64 = thumbnailDataUrl.replace(/^data:image\/png;base64,/, "");
+    const pngBuffer = Buffer.from(base64, "base64");
+    const image = nativeImage.createFromBuffer(pngBuffer);
+    showPreview(new Uint8Array(pngBuffer), image.getSize(), filePath, true);
+  } else {
+    showToast("saved");
+  }
+  recordCaptureForStarPrompt();
+  return filePath;
+}
+
 function saveRecording(data, thumbnailDataUrl, format) {
   try {
-    const folder = getSaveFolder();
-    fs.mkdirSync(folder, { recursive: true });
-
     const ext = format === "mp4" ? "mp4" : "webm";
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filePath = path.join(folder, `qgn-${timestamp}.${ext}`);
-    fs.writeFileSync(filePath, Buffer.from(data));
-
+    writeVideoFile(data, ext, thumbnailDataUrl);
     stopRecordingUI();
-
-    if (thumbnailDataUrl) {
-      const base64 = thumbnailDataUrl.replace(/^data:image\/png;base64,/, "");
-      const pngBuffer = Buffer.from(base64, "base64");
-      const image = nativeImage.createFromBuffer(pngBuffer);
-      const imgSize = image.getSize();
-      showPreview(new Uint8Array(pngBuffer), imgSize, filePath, true);
-    } else {
-      showToast("saved");
-    }
-    recordCaptureForStarPrompt();
   } catch (e) {
     console.error("Failed to save recording:", e);
     showErrorToast("Couldn't save the recording");
@@ -1124,6 +1349,9 @@ function rebuildTrayMenu() {
     { label: `Record (${hotkeyToLabel(hk.record)})`, click: showOverlayForVideo },
     { label: "Capture full screen", click: captureFullScreen },
     { label: "Annotate clipboard image", click: annotateClipboard },
+    { label: "Open Studio", click: () => openStudio() },
+    { label: "Open clipboard image in Studio", click: studioClipboard },
+    { label: "Open video in Studio...", click: openVideoFileInStudio },
     { type: "separator" },
     { label: "Settings...", click: toggleSettingsWindow },
     { type: "separator" },
@@ -1589,6 +1817,14 @@ app.whenReady().then(() => {
     if (entry) openAnnotationEditor(entry);
   });
 
+  ipcMain.on("preview-studio", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const entry = previewWindows.find((p) => p.window === win);
+    if (!entry) return;
+    if (entry.isVideo) openVideoStudio(entry);
+    else openStudio(entry);
+  });
+
   ipcMain.on("preview-copy", (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const entry = previewWindows.find((p) => p.window === win);
@@ -1674,6 +1910,110 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on("annotation-cancel", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) win.destroy();
+  });
+
+  ipcMain.on("studio-copy", (event, pngBuffer) => {
+    if (!(pngBuffer instanceof Uint8Array) && !Buffer.isBuffer(pngBuffer)) return;
+    const image = nativeImage.createFromBuffer(Buffer.from(pngBuffer));
+    if (image.isEmpty()) return;
+    copyToClipboard(image);
+    showToast("copied");
+  });
+
+  ipcMain.on("studio-save", (event, pngBuffer) => {
+    if (!(pngBuffer instanceof Uint8Array) && !Buffer.isBuffer(pngBuffer)) return;
+    // The composed mockup is a new image (background + frame, different size),
+    // so treat it as a fresh capture rather than overwriting the source.
+    handleCaptureData(Buffer.from(pngBuffer));
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) win.destroy();
+  });
+
+  ipcMain.on("studio-cancel", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) win.destroy();
+  });
+
+  ipcMain.handle("studio-get-colors", () => getStudioColors());
+
+  ipcMain.on("studio-save-colors", (event, colors) => {
+    const clean = sanitizeStudioColors(colors);
+    if (clean) saveSetting("studioColors", clean);
+  });
+
+  ipcMain.handle("studio-get-gradients", () => getStudioGradients());
+
+  ipcMain.on("studio-save-gradients", (event, gradients) => {
+    const clean = sanitizeStudioGradients(gradients);
+    if (clean) saveSetting("studioGradients", clean);
+  });
+
+  // ── Video Studio ──
+  // A finished mp4/webm produced by the renderer's MediaRecorder: write it out
+  // as a brand-new file (background + frame baked in), like a fresh recording.
+  ipcMain.on("vstudio-save-encoded", (event, payload) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    try {
+      const bytes = payload && payload.bytes;
+      if (!(bytes instanceof Uint8Array) && !Buffer.isBuffer(bytes)) throw new Error("no video data");
+      const ext = payload.format === "webm" ? "webm" : "mp4";
+      writeVideoFile(bytes, ext, payload.thumbnailDataUrl);
+      if (win && !win.isDestroyed()) win.destroy();
+    } catch (e) {
+      console.error("Failed to save Video Studio export:", e);
+      showErrorToast("Couldn't save the video");
+      if (win && !win.isDestroyed()) win.webContents.send("vstudio-export-error", "Couldn't save the video.");
+    }
+  });
+
+  // A sequence of PNG frames to assemble into an animated GIF/WebP via sharp
+  // (libvips represents an animation as a vertical strip of equal-height pages).
+  ipcMain.on("vstudio-save-frames", async (event, payload) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const fail = (msg) => {
+      console.error("Video Studio animation export failed:", msg);
+      showErrorToast("Couldn't render the " + (payload && payload.format === "webp" ? "WebP" : "GIF"));
+      if (win && !win.isDestroyed()) win.webContents.send("vstudio-export-error", "Couldn't render the animation.");
+    };
+    try {
+      const { frames, delays, width, height, format, thumbnailDataUrl } = payload || {};
+      const isWebp = format === "webp";
+      if (format !== "gif" && !isWebp) return fail("bad format");
+      if (!Array.isArray(frames) || frames.length === 0 || frames.length > 1200) return fail("bad frame count");
+      const w = Math.round(width), h = Math.round(height);
+      if (!(w > 0 && h > 0 && w <= 4096 && h <= 4096)) return fail("bad dimensions");
+      // Guard against an unreasonable transient buffer (raw RGBA strip).
+      if (w * h * 4 * frames.length > 900 * 1024 * 1024) return fail("too large");
+
+      const sharp = require("sharp");
+      const expected = w * h * 4;
+      const rawFrames = [];
+      for (const f of frames) {
+        if (!(f instanceof Uint8Array) && !Buffer.isBuffer(f)) return fail("bad frame");
+        const raw = await sharp(Buffer.from(f)).resize(w, h, { fit: "fill" }).ensureAlpha().raw().toBuffer();
+        if (raw.length !== expected) return fail("frame size mismatch");
+        rawFrames.push(raw);
+      }
+      const strip = Buffer.concat(rawFrames);
+      const delayArr = Array.isArray(delays) && delays.length === frames.length
+        ? delays.map((d) => Math.max(20, Math.round(Number(d) || 66)))
+        : frames.map(() => 66);
+
+      const pipeline = sharp(strip, { raw: { width: w, height: h * frames.length, channels: 4, pageHeight: h } });
+      const out = isWebp
+        ? await pipeline.webp({ delay: delayArr, loop: 0, quality: 80, effort: 4 }).toBuffer()
+        : await pipeline.gif({ delay: delayArr, loop: 0 }).toBuffer();
+
+      writeVideoFile(out, isWebp ? "webp" : "gif", thumbnailDataUrl);
+      if (win && !win.isDestroyed()) win.destroy();
+    } catch (e) {
+      fail(e && e.message ? e.message : e);
+    }
+  });
+
+  ipcMain.on("vstudio-cancel", (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win && !win.isDestroyed()) win.destroy();
   });

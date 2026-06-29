@@ -39,6 +39,7 @@
       }
       .card-wrapper.draggable .pin-btn,
       .card-wrapper.draggable .edit-btn,
+      .card-wrapper.draggable .studio-btn,
       .card-wrapper.draggable .copy-btn,
       .card-wrapper.draggable .close-btn,
       .card-wrapper.draggable .thumb {
@@ -122,10 +123,29 @@
       .edit-btn:hover {
         background: rgba(0, 0, 0, 0.85);
       }
-      .copy-btn {
+      .studio-btn {
         position: absolute;
         top: 6px;
         left: 74px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.9);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s;
+      }
+      .studio-btn:hover {
+        background: rgba(0, 0, 0, 0.85);
+      }
+      .copy-btn {
+        position: absolute;
+        top: 6px;
+        left: 108px;
         width: 30px;
         height: 30px;
         border-radius: 50%;
@@ -212,6 +232,9 @@
           <button class="edit-btn" id="editBtn" title="Annotate">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
           </button>
+          <button class="studio-btn" id="studioBtn" title="Open in Studio">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
+          </button>
           <button class="copy-btn" id="copyBtn" title="Copy to clipboard">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           </button>
@@ -292,12 +315,19 @@
       });
 
       const editBtn = document.getElementById("editBtn");
+      const studioBtn = document.getElementById("studioBtn");
       const copyBtn = document.getElementById("copyBtn");
 
       editBtn.addEventListener("click", () => {
         // Auto-pin so preview doesn't dismiss while annotating
         if (!pinned) togglePin();
         window.preview.edit();
+      });
+
+      studioBtn.addEventListener("click", () => {
+        // Auto-pin so preview doesn't dismiss while working in Studio
+        if (!pinned) togglePin();
+        window.preview.studio();
       });
 
       copyBtn.addEventListener("click", () => {
@@ -416,8 +446,12 @@
 
         if (data.isVideo) {
           videoBadge.style.display = "block";
+          // Annotate + copy don't apply to a video, but Studio does — keep it
+          // and slot it next to the pin where the edit button would be.
           editBtn.style.display = "none";
           copyBtn.style.display = "none";
+          studioBtn.style.left = "40px";
+          studioBtn.title = "Open in Video Studio";
         }
 
         // Restore pinned state for persistent thumbnails
