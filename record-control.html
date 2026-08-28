@@ -354,6 +354,13 @@
             videoMandatory.minHeight = display.height;
             videoMandatory.maxHeight = display.height;
           }
+          // Legacy desktopCapturer path: reliable full-rate, full-resolution
+          // capture on Windows. (getDisplayMedia's cursor:"never" was tried to
+          // hide the OS cursor for the synthetic-cursor feature, but on Windows
+          // it both failed to suppress the cursor and dropped the capture into a
+          // low-frame-rate path, so we keep this proven route. The real cursor
+          // stays in the video; the Studio's synthetic cursor is an opt-in
+          // enhancement layered on top.)
           let stream;
           try {
             stream = await navigator.mediaDevices.getUserMedia({
@@ -393,19 +400,46 @@
           ctx.fillStyle = "#000";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+          // The crop region is in the display's physical pixels. getDisplayMedia
+          // may hand back a track at a different resolution than we asked for, so
+          // scale the source rect by the actual track size to keep the crop
+          // aligned (scale is 1 when the capture matches, i.e. the legacy path).
+          // videoWidth can still be 0 on the first tick for some drivers, which
+          // would make the source rect zero-sized and throw every frame, so the
+          // scale is resolved lazily and falls back to 1:1.
+          let srcScaleX = 1;
+          let srcScaleY = 1;
+          let srcScaleResolved = false;
+          function resolveSrcScale() {
+            if (srcScaleResolved) return;
+            if (!video.videoWidth || !video.videoHeight) return;
+            srcScaleResolved = true;
+            if (display && display.width > 0 && display.height > 0) {
+              srcScaleX = video.videoWidth / display.width;
+              srcScaleY = video.videoHeight / display.height;
+            }
+          }
+          resolveSrcScale();
+
           function drawFrame() {
-            ctx.drawImage(
-              video,
-              region.x,
-              region.y,
-              region.width,
-              region.height,
-              0,
-              0,
-              region.width,
-              region.height
-            );
+            // Schedule the next frame first: one bad drawImage (a stream that
+            // briefly reports no dimensions) must not break the loop and freeze
+            // the recording on a single frame.
             animFrame = requestAnimationFrame(drawFrame);
+            resolveSrcScale();
+            try {
+              ctx.drawImage(
+                video,
+                region.x * srcScaleX,
+                region.y * srcScaleY,
+                region.width * srcScaleX,
+                region.height * srcScaleY,
+                0,
+                0,
+                region.width,
+                region.height
+              );
+            } catch (e) { /* keep the last good frame */ }
           }
           drawFrame();
 
@@ -508,6 +542,8 @@
 
           mediaRecorder.start(100);
           startTime = Date.now();
+          // Tell main the video clock's t0 so motion timestamps line up.
+          window.qgnRecord.motionStarted(startTime);
           timerInterval = setInterval(updateTimer, 1000);
         } catch (err) {
           console.error("Recording failed:", err);
@@ -530,6 +566,7 @@
         if (!mediaRecorder || mediaRecorder.state === "inactive") return;
         if (!paused) {
           mediaRecorder.pause();
+          window.qgnRecord.motionPaused();
           paused = true;
           pauseStart = Date.now();
           clearInterval(timerInterval);
@@ -538,6 +575,7 @@
           pauseBtn.innerHTML = PLAY_ICON;
         } else {
           mediaRecorder.resume();
+          window.qgnRecord.motionResumed();
           paused = false;
           pausedAccum += Date.now() - pauseStart;
           timerInterval = setInterval(updateTimer, 1000);

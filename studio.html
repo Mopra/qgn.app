@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:">
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body {
@@ -15,6 +15,7 @@
         font-size: 13px;
       }
       .app { display: flex; flex-direction: column; height: 100%; }
+      .hidden { display: none !important; }
 
       /* ── Top bar ── */
       .topbar {
@@ -54,6 +55,94 @@
       .btn svg { width: 14px; height: 14px; }
       .btn.primary { background: #007aff; border-color: #007aff; color: #fff; }
       .btn.primary:hover { background: #0a6ad8; }
+      .btn.icon { padding: 0; width: 32px; justify-content: center; }
+      .btn.active { background: rgba(0, 122, 255, 0.22); border-color: rgba(0, 122, 255, 0.6); color: #fff; }
+      .btn.flash { background: #1f7a3f; border-color: #1f7a3f; color: #fff; }
+      .btn[disabled] { opacity: 0.45; cursor: default; pointer-events: none; }
+
+      /* ── Segmented control ── */
+      .segmented {
+        display: flex;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 8px;
+        padding: 3px;
+        gap: 3px;
+      }
+      .segmented.full { width: 100%; }
+      .seg {
+        flex: 1;
+        height: 30px;
+        border: none;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.6);
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        transition: background 0.12s, color 0.12s;
+        white-space: nowrap;
+        padding: 0 6px;
+      }
+      .seg:hover { color: rgba(255, 255, 255, 0.9); }
+      .seg.active { background: rgba(255, 255, 255, 0.14); color: #fff; }
+      #modeTabs { padding: 2px; }
+      #modeTabs .seg { height: 26px; font-size: 11.5px; padding: 0 10px; }
+
+      /* ── Toast ── */
+      .toast {
+        position: fixed;
+        bottom: 22px; left: 50%;
+        transform: translateX(-50%) translateY(8px);
+        background: rgba(28, 28, 28, 0.97);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: rgba(255, 255, 255, 0.92);
+        padding: 9px 16px;
+        border-radius: 9px;
+        font-size: 12.5px;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+        opacity: 0; pointer-events: none;
+        transition: opacity 0.16s, transform 0.16s;
+        z-index: 50;
+      }
+      .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+      .toast.error { border-color: rgba(255, 80, 70, 0.5); }
+
+      /* ── Shortcuts overlay ── */
+      .help-overlay {
+        position: fixed; inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        display: none; align-items: center; justify-content: center;
+        z-index: 60;
+      }
+      .help-overlay.show { display: flex; }
+      .help-card {
+        background: #1c1c1c;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 20px 22px;
+        min-width: 320px;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+      }
+      .help-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 14px; }
+      .help-card h4 {
+        font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.06em; color: rgba(255, 255, 255, 0.35);
+        margin: 16px 0 9px;
+      }
+      .help-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 9px; }
+      .help-row:last-child { margin-bottom: 0; }
+      .help-row span { color: rgba(255, 255, 255, 0.7); font-size: 12.5px; }
+      .help-row kbd {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11.5px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 5px; padding: 2px 7px;
+        color: rgba(255, 255, 255, 0.9);
+      }
 
       /* ── Main ── */
       .main { flex: 1; display: flex; min-height: 0; }
@@ -83,33 +172,7 @@
       .row:last-child { margin-bottom: 0; }
       .row-label { font-size: 12.5px; color: rgba(255, 255, 255, 0.75); flex-shrink: 0; }
       .row-value { font-size: 12px; color: rgba(255, 255, 255, 0.45); font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
-
-      /* ── Segmented control ── */
-      .segmented {
-        display: flex;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.07);
-        border-radius: 8px;
-        padding: 3px;
-        gap: 3px;
-      }
-      .segmented.full { width: 100%; }
-      .seg {
-        flex: 1;
-        height: 30px;
-        border: none;
-        background: transparent;
-        color: rgba(255, 255, 255, 0.6);
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 500;
-        transition: background 0.12s, color 0.12s;
-        white-space: nowrap;
-        padding: 0 6px;
-      }
-      .seg:hover { color: rgba(255, 255, 255, 0.9); }
-      .seg.active { background: rgba(255, 255, 255, 0.14); color: #fff; }
+      .hint { font-size: 11.5px; color: rgba(255, 255, 255, 0.4); line-height: 1.45; margin-top: 10px; }
 
       /* ── Swatch grid ── */
       .swatches {
@@ -132,7 +195,7 @@
       .swatch.custom { display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, 0.9); }
       .swatch.custom svg { width: 15px; height: 15px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45)); pointer-events: none; }
 
-      /* ── Solid color picker ── */
+      /* ── Color picker ── */
       .color-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
       .color-input {
         width: 44px;
@@ -180,10 +243,8 @@
       .pal.active { border-color: #fff; }
       .pal .remove, .swatch .remove {
         position: absolute;
-        top: -5px;
-        right: -5px;
-        width: 15px;
-        height: 15px;
+        top: -5px; right: -5px;
+        width: 15px; height: 15px;
         border-radius: 50%;
         background: rgba(18, 18, 18, 0.95);
         border: 1px solid rgba(255, 255, 255, 0.25);
@@ -234,8 +295,7 @@
       input[type="range"]::-webkit-slider-thumb {
         -webkit-appearance: none;
         appearance: none;
-        width: 15px;
-        height: 15px;
+        width: 15px; height: 15px;
         border-radius: 50%;
         background: #fff;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
@@ -254,12 +314,185 @@
       }
       .text-input:focus { outline: none; border-color: rgba(255, 255, 255, 0.25); }
 
-      .hidden { display: none !important; }
+      /* ── Toggle switch ── */
+      .switch { position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
+      .switch input { opacity: 0; width: 0; height: 0; }
+      .slider-sw {
+        position: absolute; cursor: pointer; inset: 0;
+        background: rgba(255, 255, 255, 0.14);
+        border-radius: 22px; transition: background 0.15s;
+      }
+      .slider-sw::before {
+        content: ""; position: absolute; height: 16px; width: 16px;
+        left: 3px; bottom: 3px; background: #fff; border-radius: 50%;
+        transition: transform 0.15s;
+      }
+      .switch input:checked + .slider-sw { background: #007aff; }
+      .switch input:checked + .slider-sw::before { transform: translateX(16px); }
+
+      /* ── Stage ── */
+      .stage { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+      /* ── Tool rail (annotation) ── */
+      .toolrail {
+        height: 46px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        background: rgba(26, 26, 26, 0.98);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        overflow-x: auto;
+      }
+      .toolrail::-webkit-scrollbar { height: 0; }
+      .tool-group { display: flex; gap: 2px; flex-shrink: 0; }
+      .tool-btn {
+        width: 34px; height: 34px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.6);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.12s, color 0.12s;
+        flex-shrink: 0;
+      }
+      .tool-btn:hover { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.9); }
+      .tool-btn.active {
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+      .tool-btn[disabled] { opacity: 0.3; cursor: default; pointer-events: none; }
+      .tool-btn svg { width: 18px; height: 18px; }
+      .sep {
+        width: 1px; height: 24px;
+        background: rgba(255, 255, 255, 0.08);
+        margin: 0 4px;
+        flex-shrink: 0;
+      }
+
+      /* Annotation color dots */
+      .dots { display: flex; gap: 5px; align-items: center; flex-shrink: 0; }
+      .dot {
+        width: 20px; height: 20px;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid transparent;
+        transition: transform 0.1s, border-color 0.12s;
+        flex-shrink: 0;
+      }
+      .dot:hover { transform: scale(1.15); }
+      .dot.active { border-color: rgba(255, 255, 255, 0.9); }
+
+      /* Contextual option rows */
+      .opt-row { display: flex; gap: 2px; align-items: center; flex-shrink: 0; }
+      .size-btn {
+        height: 30px;
+        padding: 0 9px;
+        border-radius: 7px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.6);
+        cursor: pointer;
+        font-weight: 600;
+        font-family: inherit;
+        transition: background 0.12s, color 0.12s;
+      }
+      .size-btn:hover { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.9); }
+      .size-btn.active {
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+
+      /* Shape dropdown */
+      .shape-wrapper { position: relative; flex-shrink: 0; }
+      .shape-btn {
+        width: 44px; height: 34px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.6);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.12s, color 0.12s;
+        gap: 2px;
+      }
+      .shape-btn:hover { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.9); }
+      .shape-btn.active {
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+      .shape-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+      .shape-caret {
+        width: 0; height: 0;
+        border-left: 3.5px solid transparent;
+        border-right: 3.5px solid transparent;
+        border-top: 4px solid rgba(255, 255, 255, 0.4);
+        margin-left: 2px;
+        flex-shrink: 0;
+      }
+      .shape-dropdown {
+        display: none;
+        position: absolute;
+        top: 100%; left: 50%;
+        transform: translateX(-50%);
+        margin-top: 6px;
+        background: rgba(36, 36, 36, 0.98);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        padding: 4px;
+        gap: 2px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        z-index: 20;
+      }
+      .shape-dropdown.open { display: flex; }
+      .shape-option {
+        width: 34px; height: 34px;
+        border-radius: 7px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.6);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.12s, color 0.12s;
+      }
+      .shape-option:hover { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.9); }
+      .shape-option.active {
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+      .shape-option svg { width: 18px; height: 18px; }
+
+      /* ── Floating text entry over the canvas ── */
+      .annot-text-input {
+        position: fixed;
+        background: transparent;
+        border: 1px dashed rgba(255, 255, 255, 0.5);
+        outline: none;
+        font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+        font-weight: 600;
+        padding: 2px 4px;
+        min-width: 24px;
+        z-index: 70;
+      }
 
       /* ── Preview area ── */
       .preview-area {
+        position: relative;
         flex: 1;
         min-width: 0;
+        min-height: 0;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -274,7 +507,10 @@
         max-height: 100%;
         border-radius: 2px;
         box-shadow: 0 10px 50px rgba(0, 0, 0, 0.55);
+        touch-action: none;
       }
+      .preview-area.drawing #previewCanvas { cursor: crosshair; }
+      .preview-area.picking-focus, .preview-area.picking-focus #previewCanvas { cursor: crosshair; }
 
       /* ── Empty / import state ── */
       .preview-area.dragover { background: #171717; }
@@ -303,6 +539,219 @@
       .empty-state svg { width: 40px; height: 40px; opacity: 0.7; }
       .empty-title { font-size: 14px; font-weight: 600; color: rgba(255, 255, 255, 0.8); }
       .empty-sub { font-size: 12.5px; }
+
+      /* ── Video status (loading / load error) overlay ── */
+      .video-status {
+        position: absolute;
+        inset: 0;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: rgba(15, 15, 15, 0.7);
+        z-index: 5;
+        text-align: center;
+        padding: 24px;
+      }
+      .video-status.show { display: flex; }
+      .video-status .msg { font-size: 13px; color: rgba(255, 255, 255, 0.75); max-width: 320px; line-height: 1.4; }
+      .video-status.error .msg { color: #ff7a70; }
+      .spinner {
+        width: 30px; height: 30px;
+        border: 3px solid rgba(255, 255, 255, 0.15);
+        border-top-color: rgba(255, 255, 255, 0.8);
+        border-radius: 50%;
+        animation: vsspin 0.8s linear infinite;
+      }
+      .video-status.error .spinner { display: none; }
+      @keyframes vsspin { to { transform: rotate(360deg); } }
+
+      /* ── Export progress overlay ── */
+      .progress-overlay {
+        position: absolute;
+        inset: 0;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: rgba(10, 10, 10, 0.84);
+        z-index: 6;
+      }
+      .progress-overlay.active { display: flex; }
+      .progress-title { font-size: 14px; font-weight: 600; letter-spacing: 0.01em; }
+      .progress-sub { font-size: 12px; color: rgba(255, 255, 255, 0.5); }
+      .progress-bar {
+        width: 280px;
+        max-width: 60%;
+        height: 6px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.12);
+        overflow: hidden;
+      }
+      .progress-bar-fill { height: 100%; width: 0%; background: #007aff; border-radius: 3px; transition: width 0.15s linear; }
+
+      /* ── Transport bar ── */
+      .transport {
+        height: 64px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 18px;
+        background: rgba(20, 20, 20, 0.98);
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .tbtn {
+        width: 34px; height: 34px;
+        flex-shrink: 0;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.85);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.12s, border-color 0.12s, color 0.12s;
+        position: relative;
+      }
+      .tbtn:hover { background: rgba(255, 255, 255, 0.12); }
+      .tbtn svg { width: 17px; height: 17px; fill: currentColor; }
+      .tbtn.active { background: rgba(0, 122, 255, 0.22); border-color: rgba(0, 122, 255, 0.6); color: #fff; }
+      .tbtn .slash {
+        display: none;
+        position: absolute;
+        inset: 0;
+        margin: auto;
+        width: 22px; height: 22px;
+        pointer-events: none;
+      }
+      .tbtn.muted .slash { display: block; }
+
+      .time {
+        font-variant-numeric: tabular-nums;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.6);
+        min-width: 86px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .time b { color: rgba(255, 255, 255, 0.95); font-weight: 600; }
+
+      /* ── Timeline / trim ── */
+      .timeline { position: relative; flex: 1; height: 40px; cursor: pointer; touch-action: none; }
+      .track {
+        position: absolute;
+        top: 50%; left: 0; right: 0;
+        height: 8px;
+        transform: translateY(-50%);
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        overflow: hidden;
+      }
+      .track-sel {
+        position: absolute;
+        top: 50%;
+        height: 8px;
+        transform: translateY(-50%);
+        background: rgba(0, 122, 255, 0.55);
+        pointer-events: none;
+      }
+      .playhead {
+        position: absolute;
+        top: 6px; bottom: 6px;
+        width: 2px;
+        margin-left: -1px;
+        background: #fff;
+        border-radius: 1px;
+        pointer-events: none;
+        box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+      }
+      .handle {
+        position: absolute;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 12px; height: 26px;
+        border-radius: 4px;
+        background: #fff;
+        cursor: ew-resize;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+        z-index: 2;
+      }
+      .handle::after {
+        content: "";
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 2px; height: 12px;
+        background: rgba(0, 0, 0, 0.35);
+        border-radius: 1px;
+        box-shadow: 3px 0 0 rgba(0,0,0,0.35), -3px 0 0 rgba(0,0,0,0.35);
+      }
+
+      /* ── Motion timeline (zoom keyframe lane) ── */
+      .motion-bar {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 18px 12px;
+        background: rgba(20, 20, 20, 0.98);
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .motion-tools { display: flex; gap: 6px; flex-shrink: 0; }
+      .mtool {
+        height: 28px; padding: 0 10px;
+        border-radius: 7px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 11.5px; font-weight: 500; cursor: pointer;
+        display: inline-flex; align-items: center; gap: 5px;
+        transition: background 0.12s, border-color 0.12s, opacity 0.12s;
+        white-space: nowrap;
+      }
+      .mtool:hover { background: rgba(255, 255, 255, 0.12); }
+      .mtool[disabled] { opacity: 0.4; cursor: default; pointer-events: none; }
+      .motion-timeline {
+        position: relative;
+        flex: 1;
+        height: 34px;
+        touch-action: none;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.04);
+        overflow: hidden;
+      }
+      .motion-empty {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 11.5px; color: rgba(255, 255, 255, 0.32);
+        pointer-events: none;
+      }
+      .zseg {
+        position: absolute; top: 4px; bottom: 4px;
+        background: rgba(0, 122, 255, 0.28);
+        border: 1px solid rgba(0, 122, 255, 0.55);
+        border-radius: 5px;
+        cursor: grab;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 10.5px; color: rgba(255, 255, 255, 0.9);
+        font-variant-numeric: tabular-nums;
+        overflow: hidden; user-select: none;
+      }
+      .zseg.selected { background: rgba(0, 122, 255, 0.42); border-color: #4aa3ff; box-shadow: 0 0 0 1px rgba(74,163,255,0.4); }
+      .zseg.auto { background: rgba(120, 90, 220, 0.26); border-color: rgba(140, 110, 235, 0.55); }
+      .zseg.auto.selected { background: rgba(140, 110, 235, 0.44); border-color: #a48cf0; box-shadow: 0 0 0 1px rgba(164,140,240,0.4); }
+      .zseg .zedge { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; }
+      .zseg .zedge.l { left: 0; }
+      .zseg .zedge.r { right: 0; }
+      .mplayhead {
+        position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px;
+        background: #fff; border-radius: 1px; pointer-events: none;
+        box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+      }
     </style>
   </head>
   <body>
@@ -310,20 +759,32 @@
       <div class="topbar">
         <div class="brand">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
-          <span>Studio <span class="muted">· Mockup</span></span>
+          <span>Studio <span class="muted">· <span id="brandKind">Mockup</span></span></span>
         </div>
-        <button class="btn" id="importBtn" title="Import an image">
+
+        <div class="segmented image-only" id="modeTabs" title="Markup edits the image itself. Compose frames it on a background.">
+          <button class="seg" data-mode="markup">Markup</button>
+          <button class="seg active" data-mode="compose">Compose</button>
+        </div>
+
+        <button class="btn image-only" id="importBtn" title="Import an image" aria-label="Import an image">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Import
         </button>
+
         <div class="topbar-spacer"></div>
+
         <div class="actions">
-          <button class="btn" id="cancelBtn">Cancel</button>
-          <button class="btn" id="copyBtn" title="Copy mockup to clipboard">
+          <button class="btn icon" id="helpBtn" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17"/></svg>
+          </button>
+          <button class="btn" id="cancelBtn" aria-label="Cancel and close">Cancel</button>
+          <button class="btn image-only" id="copyBtn" title="Copy to clipboard" aria-label="Copy to clipboard">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             Copy
           </button>
-          <button class="btn primary" id="saveBtn" title="Copy & save mockup">Save</button>
+          <button class="btn primary image-only" id="saveBtn" title="Save">Save as new</button>
+          <button class="btn primary video-only hidden" id="exportBtn" title="Render and save the framed video" aria-label="Render and save the framed video">Export MP4</button>
         </div>
       </div>
 
@@ -428,772 +889,255 @@
               </div>
             </div>
           </div>
+
+          <!-- Cursor (clips only) -->
+          <div class="section video-only hidden" id="cursorSection">
+            <div class="section-title">Cursor</div>
+            <div class="row">
+              <span class="row-label">Synthetic cursor</span>
+              <label class="switch"><input type="checkbox" id="cursorEnabled" /><span class="slider-sw"></span></label>
+            </div>
+            <div class="segmented full" id="cursorStyleTabs" style="margin-bottom: 12px;">
+              <button class="seg active" data-cstyle="arrow">Arrow</button>
+              <button class="seg" data-cstyle="dot">Dot</button>
+              <button class="seg" data-cstyle="ring">Ring</button>
+            </div>
+            <div class="row">
+              <span class="row-label">Size</span>
+              <input type="range" id="cursorSize" min="50" max="250" value="100" />
+              <span class="row-value" id="cursorSizeValue">100</span>
+            </div>
+            <div class="color-row">
+              <input type="color" class="color-input" id="cursorColor" value="#ffffff" />
+              <input type="text" class="color-hex" id="cursorColorHex" value="#FFFFFF" maxlength="7" />
+            </div>
+            <div class="row" style="margin-top: 12px;">
+              <span class="row-label">Click ripple</span>
+              <label class="switch"><input type="checkbox" id="cursorRipple" checked /><span class="slider-sw"></span></label>
+            </div>
+            <div class="hint" id="cursorHint"></div>
+          </div>
+
+          <!-- Zoom keyframe inspector (clips only) -->
+          <div class="section hidden" id="zoomSection">
+            <div class="section-title">Zoom keyframe</div>
+            <div class="row">
+              <span class="row-label">Zoom</span>
+              <input type="range" id="zoomScale" min="100" max="300" value="180" />
+              <span class="row-value" id="zoomScaleValue">1.8×</span>
+            </div>
+            <div class="row">
+              <span class="row-label">Ease in</span>
+              <input type="range" id="zoomEaseIn" min="0" max="150" value="40" />
+              <span class="row-value" id="zoomEaseInValue">0.4s</span>
+            </div>
+            <div class="row">
+              <span class="row-label">Ease out</span>
+              <input type="range" id="zoomEaseOut" min="0" max="150" value="50" />
+              <span class="row-value" id="zoomEaseOutValue">0.5s</span>
+            </div>
+            <button class="btn" id="setFocusBtn" style="width: 100%; justify-content: center; margin-top: 4px;">Set focus point</button>
+            <div class="hint" id="focusHint">Click the preview to place the zoom focus.</div>
+          </div>
+
+          <!-- Export format (clips only) -->
+          <div class="section video-only hidden">
+            <div class="section-title">Export format</div>
+            <div class="segmented full" id="formatTabs">
+              <button class="seg active" data-format="mp4">MP4</button>
+              <button class="seg" data-format="webm">WebM</button>
+              <button class="seg" data-format="gif">GIF</button>
+              <button class="seg" data-format="webp">WebP</button>
+            </div>
+            <div class="hint" id="formatHint">MP4: best for sharing. Keeps audio. Rendered in real time.</div>
+            <div class="hint" id="sizeHint" style="margin-top: 4px; color: rgba(255,255,255,0.55);"></div>
+          </div>
         </div>
 
-        <div class="preview-area" id="previewArea">
-          <canvas id="previewCanvas" class="hidden"></canvas>
-          <div class="empty-state" id="emptyState">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
-            <div class="empty-title">Import an image to start</div>
-            <div class="empty-sub">Click to browse, or drop an image here</div>
+        <div class="stage">
+          <div class="toolrail">
+            <div class="tool-group">
+              <button class="tool-btn active" data-tool="none" title="Pointer (V), no drawing">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2 L5 19 L8.7 15.3 L11 20.4 L13.1 19.5 L10.7 14.5 L15.5 14.5 Z"/></svg>
+              </button>
+              <button class="tool-btn" data-tool="draw" title="Draw (D)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+              </button>
+              <button class="tool-btn" data-tool="arrow" title="Arrow (A)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="10 5 19 5 19 14"/></svg>
+              </button>
+              <div class="shape-wrapper">
+                <button class="shape-btn" id="shapeBtn" title="Shape (S)">
+                  <svg id="shapeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                  <span class="shape-caret"></span>
+                </button>
+                <div class="shape-dropdown" id="shapeDropdown">
+                  <button class="shape-option active" data-shape="rect" title="Rectangle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                  </button>
+                  <button class="shape-option" data-shape="ellipse" title="Ellipse">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9" ry="7"/></svg>
+                  </button>
+                  <button class="shape-option" data-shape="diamond" title="Diamond">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2, 22 12, 12 22, 2 12"/></svg>
+                  </button>
+                  <button class="shape-option" data-shape="line" title="Line">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="20" y2="4"/></svg>
+                  </button>
+                </div>
+              </div>
+              <button class="tool-btn" data-tool="text" title="Text (T)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9.5" y1="20" x2="14.5" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+              </button>
+              <button class="tool-btn" data-tool="redact" title="Redact (X)">
+                <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+              </button>
+              <button class="tool-btn" data-tool="callout" title="Callout (C)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><text x="12" y="16" text-anchor="middle" fill="currentColor" stroke="none" font-size="12" font-weight="700">1</text></svg>
+              </button>
+              <button class="tool-btn" data-tool="cursor" title="Cursor stamp (P)">
+                <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M5 2 L5 19 L8.7 15.3 L11 20.4 L13.1 19.5 L10.7 14.5 L15.5 14.5 Z"/></svg>
+              </button>
+              <button class="tool-btn" data-tool="crop" title="Crop (R)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>
+              </button>
+            </div>
+
+            <div class="sep"></div>
+
+            <button class="tool-btn" id="undoBtn" title="Undo (Ctrl+Z)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+            </button>
+            <button class="tool-btn" id="redoBtn" title="Redo (Ctrl+Y)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.13-9.36L23 10"/></svg>
+            </button>
+            <button class="tool-btn hidden" id="resetCropBtn" title="Reset crop">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v6h6"/><path d="M3.51 9a9 9 0 1 0 2.13-3.36L3 9"/></svg>
+            </button>
+
+            <div class="sep"></div>
+
+            <div class="dots" id="colorRow">
+              <div class="dot active" data-annot-color="#ff3b30" style="background:#ff3b30"></div>
+              <div class="dot" data-annot-color="#ff9500" style="background:#ff9500"></div>
+              <div class="dot" data-annot-color="#ffcc00" style="background:#ffcc00"></div>
+              <div class="dot" data-annot-color="#34c759" style="background:#34c759"></div>
+              <div class="dot" data-annot-color="#007aff" style="background:#007aff"></div>
+              <div class="dot" data-annot-color="#ffffff" style="background:#ffffff;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.2)"></div>
+            </div>
+
+            <div class="opt-row hidden" id="textSizeRow">
+              <button class="size-btn" data-textsize="S" style="font-size:11px" title="Small text">S</button>
+              <button class="size-btn active" data-textsize="M" style="font-size:13px" title="Medium text">M</button>
+              <button class="size-btn" data-textsize="L" style="font-size:15px" title="Large text">L</button>
+            </div>
+
+            <div class="opt-row hidden" id="redactStyleRow">
+              <button class="size-btn active" data-redact="solid" style="font-size:12px" title="Solid block (safest)">Block</button>
+              <button class="size-btn" data-redact="pixelate" style="font-size:12px" title="Pixelate">Pixel</button>
+            </div>
+
+            <div class="opt-row hidden" id="pixelSizeRow">
+              <button class="size-btn" data-pixel="S" style="font-size:11px" title="Fine pixels">S</button>
+              <button class="size-btn active" data-pixel="M" style="font-size:13px" title="Medium pixels">M</button>
+              <button class="size-btn" data-pixel="L" style="font-size:15px" title="Heavy pixels">L</button>
+            </div>
           </div>
-          <input type="file" id="importInput" accept="image/*" class="hidden" />
+
+          <div class="preview-area" id="previewArea">
+            <canvas id="previewCanvas" class="hidden"></canvas>
+            <div class="empty-state" id="emptyState">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
+              <div class="empty-title">Import an image to start</div>
+              <div class="empty-sub">Click to browse, drop an image here, or paste (Ctrl+V)</div>
+            </div>
+            <input type="file" id="importInput" accept="image/*" class="hidden" />
+
+            <div class="video-status" id="videoStatus">
+              <div class="spinner"></div>
+              <div class="msg" id="videoStatusMsg">Loading video…</div>
+            </div>
+            <div class="progress-overlay" id="progressOverlay">
+              <div class="progress-title" id="progressTitle">Rendering…</div>
+              <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+              <div class="progress-sub" id="progressSub">0%</div>
+              <button class="btn" id="cancelExportBtn">Cancel</button>
+            </div>
+          </div>
+
+          <div class="transport video-only hidden">
+            <button class="tbtn" id="playBtn" title="Play / pause (Space)" aria-label="Play or pause">
+              <svg id="playIcon" viewBox="0 0 24 24"><polygon points="7,4 20,12 7,20"/></svg>
+            </button>
+            <span class="time" id="timeLabel"><b>0:00</b> / 0:00</span>
+            <div class="timeline" id="timeline">
+              <div class="track">
+                <div class="track-sel" id="trackSel"></div>
+              </div>
+              <div class="playhead" id="playhead" style="left: 0%;"></div>
+              <div class="handle" id="handleIn" style="left: 0%;" title="Trim start (I)"></div>
+              <div class="handle" id="handleOut" style="left: 100%;" title="Trim end (O)"></div>
+            </div>
+            <button class="tbtn" id="loopBtn" title="Loop the trimmed range" aria-label="Loop the trimmed range">
+              <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+            </button>
+            <button class="tbtn" id="muteBtn" title="Mute audio in the export" aria-label="Mute audio in the export">
+              <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+              <svg class="slash" viewBox="0 0 24 24"><line x1="3" y1="3" x2="21" y2="21" stroke="#ff3b30" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+
+          <div class="motion-bar video-only hidden" id="motionBar">
+            <div class="motion-tools">
+              <button class="mtool" id="addZoomBtn" title="Add a zoom keyframe at the playhead">+ Zoom</button>
+              <button class="mtool" id="delZoomBtn" title="Delete the selected zoom" disabled>Delete</button>
+              <button class="mtool" id="regenZoomBtn" title="Rebuild auto zoom-ins from clicks">Auto</button>
+            </div>
+            <div class="motion-timeline" id="motionLane">
+              <div class="motion-empty" id="motionEmpty">No motion data for this clip</div>
+              <div class="mplayhead" id="mPlayhead" style="left: 0%;"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <script>
-      /* ───────────────────────── Presets ───────────────────────── */
-      const GRADIENTS = [
-        { id: "indigo", angle: 135, stops: [[0, "#4f46e5"], [1, "#9333ea"]] },
-        { id: "blush",  angle: 135, stops: [[0, "#ff6a88"], [1, "#ff99ac"]] },
-        { id: "ocean",  angle: 135, stops: [[0, "#2193b0"], [1, "#6dd5ed"]] },
-        { id: "lime",   angle: 135, stops: [[0, "#0ba360"], [1, "#3cba92"]] },
-        { id: "peach",  angle: 135, stops: [[0, "#ffd194"], [1, "#fc8d6f"]] },
-        { id: "grape",  angle: 135, stops: [[0, "#654ea3"], [1, "#eaafc8"]] },
-        { id: "sky",    angle: 135, stops: [[0, "#56ccf2"], [1, "#2f80ed"]] },
-        { id: "slate",  angle: 135, stops: [[0, "#e0eafc"], [1, "#cfdef3"]] },
-        { id: "coral",  angle: 135, stops: [[0, "#ff9966"], [1, "#ff5e62"]] },
-        { id: "night",  angle: 135, stops: [[0, "#0f2027"], [0.5, "#203a43"], [1, "#2c5364"]] },
-      ];
-
-      const WALLPAPERS = [
-        { id: "aurora",  base: "#0b1020", blend: "lighter", blobs: [
-          { x: 0.18, y: 0.22, r: 0.75, c: "#3b82f6" },
-          { x: 0.84, y: 0.20, r: 0.65, c: "#8b5cf6" },
-          { x: 0.62, y: 0.88, r: 0.80, c: "#06b6d4" } ] },
-        { id: "sequoia", base: "#1a0f2e", blend: "lighter", blobs: [
-          { x: 0.20, y: 0.25, r: 0.70, c: "#ec4899" },
-          { x: 0.85, y: 0.30, r: 0.70, c: "#8b5cf6" },
-          { x: 0.55, y: 0.90, r: 0.75, c: "#f97316" } ] },
-        { id: "mint",    base: "#04211a", blend: "lighter", blobs: [
-          { x: 0.22, y: 0.20, r: 0.72, c: "#10b981" },
-          { x: 0.82, y: 0.28, r: 0.66, c: "#22d3ee" },
-          { x: 0.55, y: 0.92, r: 0.72, c: "#34d399" } ] },
-        { id: "bigsur",  base: "#08243f", blend: "lighter", blobs: [
-          { x: 0.15, y: 0.25, r: 0.75, c: "#2563eb" },
-          { x: 0.80, y: 0.18, r: 0.65, c: "#0ea5e9" },
-          { x: 0.70, y: 0.90, r: 0.80, c: "#6366f1" } ] },
-        { id: "ember",   base: "#1b0a12", blend: "lighter", blobs: [
-          { x: 0.20, y: 0.28, r: 0.72, c: "#f43f5e" },
-          { x: 0.85, y: 0.25, r: 0.62, c: "#fb923c" },
-          { x: 0.55, y: 0.92, r: 0.70, c: "#a855f7" } ] },
-        { id: "bloom",   base: "#fde4ec", blend: "normal", blobs: [
-          { x: 0.18, y: 0.22, r: 0.70, c: "#c7d2fe" },
-          { x: 0.84, y: 0.26, r: 0.66, c: "#fbcfe8" },
-          { x: 0.55, y: 0.88, r: 0.74, c: "#bae6fd" } ] },
-      ];
-
-      const ASPECTS = { auto: null, "16:9": 16 / 9, "4:3": 4 / 3, "1:1": 1, "9:16": 9 / 16, "3:2": 3 / 2 };
-
-      /* ───────────────────────── State ───────────────────────── */
-      const state = {
-        bgMode: "gradient",
-        gradientId: "indigo",
-        gradientCustom: { angle: 135, c0: "#6366f1", c1: "#9333ea" },
-        wallpaperId: "aurora",
-        solidColor: "#6366f1",
-        customImage: null,
-        frame: "window",
-        frameTheme: "light",
-        url: "app.example.com",
-        // Stored as fractions of the screenshot's larger dimension for
-        // resolution-independent output. Slider values (0-100) map onto these.
-        padPct: 0.08,
-        radiusPct: 0.018,
-        shadowPct: 0.05,
-        aspect: "auto",
-      };
-
-      const baseImg = new Image();
-      let imgW = 0, imgH = 0;
-
-      // User-saved custom gradients (loaded from disk in the gradient section).
-      let savedGradients = [];
-
-      const previewArea = document.getElementById("previewArea");
-      const previewCanvas = document.getElementById("previewCanvas");
-      const previewCtx = previewCanvas.getContext("2d");
-
-      /* ───────────────────────── Color helpers ───────────────────────── */
-      function hexToRgb(hex) {
-        let h = hex.replace("#", "");
-        if (h.length === 3) h = h.split("").map((c) => c + c).join("");
-        const n = parseInt(h, 16);
-        return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-      }
-      function rgba(hex, a) {
-        const { r, g, b } = hexToRgb(hex);
-        return `rgba(${r},${g},${b},${a})`;
-      }
-
-      // The custom gradient is a live two-stop gradient driven by the editor.
-      function buildCustomGradient() {
-        const c = state.gradientCustom;
-        return { id: "custom", angle: c.angle, stops: [[0, c.c0], [1, c.c1]] };
-      }
-      // A saved gradient ({id, angle, c0, c1}) expanded to a renderable preset.
-      function gradientFromSaved(g) {
-        return { id: g.id, angle: g.angle, stops: [[0, g.c0], [1, g.c1]] };
-      }
-      function currentGradient() {
-        if (state.gradientId === "custom") return buildCustomGradient();
-        const preset = GRADIENTS.find((p) => p.id === state.gradientId);
-        if (preset) return preset;
-        const saved = savedGradients.find((g) => g.id === state.gradientId);
-        if (saved) return gradientFromSaved(saved);
-        return GRADIENTS[0];
-      }
-
-      /* ───────────────────────── Background rendering ───────────────────────── */
-      function paintBackground(ctx, w, h) {
-        if (state.bgMode === "solid") {
-          ctx.fillStyle = state.solidColor;
-          ctx.fillRect(0, 0, w, h);
-          return;
-        }
-        if (state.bgMode === "image" && state.customImage) {
-          drawCover(ctx, state.customImage, 0, 0, w, h);
-          return;
-        }
-        if (state.bgMode === "wallpaper") {
-          const wp = WALLPAPERS.find((p) => p.id === state.wallpaperId) || WALLPAPERS[0];
-          ctx.fillStyle = wp.base;
-          ctx.fillRect(0, 0, w, h);
-          const max = Math.max(w, h);
-          ctx.save();
-          ctx.globalCompositeOperation = wp.blend === "lighter" ? "lighter" : "source-over";
-          for (const b of wp.blobs) {
-            const cx = b.x * w, cy = b.y * h, rad = b.r * max;
-            const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
-            g.addColorStop(0, rgba(b.c, wp.blend === "lighter" ? 0.85 : 0.9));
-            g.addColorStop(1, rgba(b.c, 0));
-            ctx.fillStyle = g;
-            ctx.fillRect(0, 0, w, h);
-          }
-          ctx.restore();
-          return;
-        }
-        // gradient (default)
-        const gr = currentGradient();
-        const rad = (gr.angle * Math.PI) / 180;
-        const cx = w / 2, cy = h / 2;
-        const dx = Math.cos(rad), dy = Math.sin(rad);
-        const half = (Math.abs(w * dx) + Math.abs(h * dy)) / 2;
-        const g = ctx.createLinearGradient(cx - dx * half, cy - dy * half, cx + dx * half, cy + dy * half);
-        for (const [pos, color] of gr.stops) g.addColorStop(pos, color);
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, w, h);
-      }
-
-      // Draw an image to cover a target rect (object-fit: cover), centered.
-      function drawCover(ctx, img, x, y, w, h) {
-        const iw = img.naturalWidth || img.width;
-        const ih = img.naturalHeight || img.height;
-        if (!iw || !ih) return;
-        const scale = Math.max(w / iw, h / ih);
-        const dw = iw * scale, dh = ih * scale;
-        ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
-      }
-
-      /* ───────────────────────── Layout ───────────────────────── */
-      function layout() {
-        const baseDim = Math.max(imgW, imgH) || 1;
-        const pad = state.padPct * baseDim;
-        const radius = state.radiusPct * baseDim;
-        const headerH = state.frame === "browser" ? Math.max(34, baseDim * 0.045) : 0;
-        const frameW = imgW;
-        const frameH = imgH + headerH;
-        const paddedW = frameW + pad * 2;
-        const paddedH = frameH + pad * 2;
-        let sceneW = paddedW, sceneH = paddedH;
-        const ar = ASPECTS[state.aspect];
-        if (ar) {
-          if (paddedW / paddedH < ar) sceneW = paddedH * ar;
-          else sceneH = paddedW / ar;
-        }
-        return {
-          baseDim, pad, radius, headerH, frameW, frameH, sceneW, sceneH,
-          frameX: (sceneW - frameW) / 2,
-          frameY: (sceneH - frameH) / 2,
-        };
-      }
-
-      /* ───────────────────────── Scene rendering ───────────────────────── */
-      // Draws the whole composition in natural pixels, scaled by S. S = 1 for
-      // export; S = fit-to-preview for the live canvas.
-      function renderScene(ctx, S, L) {
-        ctx.setTransform(S, 0, 0, S, 0, 0);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-        ctx.clearRect(0, 0, L.sceneW, L.sceneH);
-
-        paintBackground(ctx, L.sceneW, L.sceneH);
-
-        const r = Math.min(L.radius, L.frameW / 2, L.frameH / 2);
-
-        // Drop shadow cast by the framed screenshot.
-        if (state.shadowPct > 0) {
-          ctx.save();
-          ctx.shadowColor = `rgba(0,0,0,${0.35})`;
-          ctx.shadowBlur = state.shadowPct * L.baseDim;
-          ctx.shadowOffsetY = state.shadowPct * L.baseDim * 0.45;
-          ctx.beginPath();
-          ctx.roundRect(L.frameX, L.frameY, L.frameW, L.frameH, r);
-          ctx.fillStyle = "#ffffff";
-          ctx.fill();
-          ctx.restore();
-        }
-
-        // Framed content, clipped to rounded rect.
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(L.frameX, L.frameY, L.frameW, L.frameH, r);
-        ctx.clip();
-
-        if (state.frame === "browser") {
-          const dark = state.frameTheme === "dark";
-          ctx.fillStyle = dark ? "#2b2b30" : "#f6f6f7";
-          ctx.fillRect(L.frameX, L.frameY, L.frameW, L.headerH);
-          drawBrowserChrome(ctx, L, dark);
-          ctx.drawImage(baseImg, L.frameX, L.frameY + L.headerH, imgW, imgH);
-        } else {
-          ctx.drawImage(baseImg, L.frameX, L.frameY, imgW, imgH);
-        }
-        ctx.restore();
-
-        // Window frames get a subtle edge so they read as a window, not a
-        // borderless cutout.
-        if (state.frame === "window" || state.frame === "browser") {
-          ctx.save();
-          ctx.beginPath();
-          ctx.roundRect(L.frameX, L.frameY, L.frameW, L.frameH, r);
-          ctx.lineWidth = Math.max(1, L.baseDim * 0.0012);
-          ctx.strokeStyle = "rgba(0,0,0,0.12)";
-          ctx.stroke();
-          ctx.restore();
-        }
-      }
-
-      function drawBrowserChrome(ctx, L, dark) {
-        const hY = L.frameY + L.headerH / 2;
-        const dotR = Math.max(3, L.headerH * 0.11);
-        const startX = L.frameX + L.headerH * 0.6;
-        const gap = dotR * 3.2;
-        const dotColors = ["#ff5f57", "#febc2e", "#28c840"];
-        for (let i = 0; i < 3; i++) {
-          ctx.beginPath();
-          ctx.arc(startX + i * gap, hY, dotR, 0, Math.PI * 2);
-          ctx.fillStyle = dotColors[i];
-          ctx.fill();
-        }
-
-        // Address bar pill, centered.
-        const pillH = L.headerH * 0.52;
-        const pillW = Math.min(L.frameW * 0.55, L.frameW - (startX - L.frameX) * 2 - gap * 2);
-        if (pillW > pillH) {
-          const pillX = L.frameX + (L.frameW - pillW) / 2;
-          const pillY = hY - pillH / 2;
-          ctx.beginPath();
-          ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
-          ctx.fillStyle = dark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.05)";
-          ctx.fill();
-          if (state.url) {
-            const fs = Math.min(pillH * 0.5, L.headerH * 0.3);
-            ctx.font = `500 ${fs}px -apple-system, "Segoe UI", system-ui, sans-serif`;
-            ctx.fillStyle = dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(state.url, pillX + pillW / 2, hY + fs * 0.05, pillW * 0.9);
-            ctx.textAlign = "start";
-          }
-        }
-      }
-
-      /* ───────────────────────── Preview loop ───────────────────────── */
-      let rafPending = false;
-      function scheduleRender() {
-        if (rafPending) return;
-        rafPending = true;
-        requestAnimationFrame(() => {
-          rafPending = false;
-          renderPreview();
-        });
-      }
-
-      function renderPreview() {
-        if (!imgW || !imgH) return;
-        const L = layout();
-        const dpr = window.devicePixelRatio || 1;
-        const areaRect = previewArea.getBoundingClientRect();
-        const pad = 36;
-        const availW = Math.max(50, areaRect.width - pad * 2);
-        const availH = Math.max(50, areaRect.height - pad * 2);
-        const fit = Math.min(availW / L.sceneW, availH / L.sceneH);
-        const dispW = L.sceneW * fit;
-        const dispH = L.sceneH * fit;
-        previewCanvas.style.width = dispW + "px";
-        previewCanvas.style.height = dispH + "px";
-        previewCanvas.width = Math.max(1, Math.round(dispW * dpr));
-        previewCanvas.height = Math.max(1, Math.round(dispH * dpr));
-        renderScene(previewCtx, fit * dpr, L);
-      }
-
-      /* ───────────────────────── Export ───────────────────────── */
-      function compose() {
-        const L = layout();
-        const out = document.createElement("canvas");
-        out.width = Math.max(1, Math.round(L.sceneW));
-        out.height = Math.max(1, Math.round(L.sceneH));
-        renderScene(out.getContext("2d"), 1, L);
-        return out;
-      }
-      function exportTo(send) {
-        if (!imgW || !imgH) return;
-        compose().toBlob((blob) => {
-          if (!blob) return;
-          blob.arrayBuffer().then((buf) => send(new Uint8Array(buf)));
-        }, "image/png");
-      }
-
-      /* ───────────────────────── Swatch UI ───────────────────────── */
-      function gradientCss(gr) {
-        const stops = gr.stops.map(([p, c]) => `${c} ${Math.round(p * 100)}%`).join(", ");
-        return `linear-gradient(${gr.angle}deg, ${stops})`;
-      }
-      function wallpaperCss(wp) {
-        const layers = wp.blobs.map((b) =>
-          `radial-gradient(circle at ${Math.round(b.x * 100)}% ${Math.round(b.y * 100)}%, ${b.c} 0%, transparent ${Math.round(b.r * 55)}%)`
-        );
-        return `${layers.join(", ")}, ${wp.base}`;
-      }
-
-      function buildSwatches(container, presets, css, getId, setId, onSelect) {
-        container.innerHTML = "";
-        for (const p of presets) {
-          const el = document.createElement("div");
-          el.className = "swatch" + (getId() === p.id ? " active" : "");
-          el.style.background = css(p);
-          el.dataset.id = p.id;
-          el.addEventListener("click", () => {
-            setId(p.id);
-            container.querySelectorAll(".swatch").forEach((s) => s.classList.toggle("active", s.dataset.id === p.id));
-            if (onSelect) onSelect(p.id);
-            scheduleRender();
-          });
-          container.appendChild(el);
-        }
-      }
-
-      const gradientContainer = document.getElementById("gradientSwatches");
-      const gradientCustomPanel = document.getElementById("gradientCustomPanel");
-      const MAX_SAVED_GRADIENTS = 24;
-
-      // Unique id for a saved gradient. Regenerated on load, so ids are stable
-      // only within a session (the palette is keyed by content, not id).
-      let gradSeq = 0;
-      function gradientUid() { return "g" + Date.now().toString(36) + "-" + (gradSeq++); }
-      function gradientKey(angle, c0, c1) { return angle + "|" + c0 + "|" + c1; }
-
-      // The editor only shows while the custom gradient swatch is selected.
-      function updateGradientCustomVisibility() {
-        const show = state.bgMode === "gradient" && state.gradientId === "custom";
-        gradientCustomPanel.classList.toggle("hidden", !show);
-      }
-      function refreshCustomSwatch() {
-        const el = gradientContainer.querySelector(".swatch.custom");
-        if (el) el.style.background = gradientCss(buildCustomGradient());
-      }
-
-      function setActiveGradient(id) {
-        state.gradientId = id;
-        gradientContainer.querySelectorAll(".swatch").forEach((s) => s.classList.toggle("active", s.dataset.id === id));
-      }
-
-      // A selectable gradient swatch. Pass removeId to add a hover × that
-      // deletes a saved gradient from the palette.
-      function makeGradientSwatch(id, background, removeId) {
-        const el = document.createElement("div");
-        el.className = "swatch" + (state.gradientId === id ? " active" : "");
-        el.style.background = background;
-        el.dataset.id = id;
-        el.addEventListener("click", () => {
-          setActiveGradient(id);
-          updateGradientCustomVisibility();
-          scheduleRender();
-        });
-        if (removeId) {
-          const rm = document.createElement("div");
-          rm.className = "remove";
-          rm.textContent = "×";
-          rm.title = "Remove from palette";
-          rm.addEventListener("click", (e) => { e.stopPropagation(); removeSavedGradient(removeId); });
-          el.appendChild(rm);
-        }
-        return el;
-      }
-
-      // Grid order: built-in presets, then user-saved gradients, then the
-      // custom-gradient editor trigger (pencil) at the very end.
-      function renderGradientSwatches() {
-        gradientContainer.innerHTML = "";
-        for (const p of GRADIENTS) {
-          gradientContainer.appendChild(makeGradientSwatch(p.id, gradientCss(p), null));
-        }
-        for (const g of savedGradients) {
-          gradientContainer.appendChild(makeGradientSwatch(g.id, gradientCss(gradientFromSaved(g)), g.id));
-        }
-        const customEl = document.createElement("div");
-        customEl.className = "swatch custom" + (state.gradientId === "custom" ? " active" : "");
-        customEl.dataset.id = "custom";
-        customEl.title = "Custom gradient";
-        customEl.style.background = gradientCss(buildCustomGradient());
-        customEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
-        customEl.addEventListener("click", () => {
-          setActiveGradient("custom");
-          updateGradientCustomVisibility();
-          scheduleRender();
-        });
-        gradientContainer.appendChild(customEl);
-      }
-
-      function persistGradients() {
-        window.studio.saveGradients(savedGradients.map((g) => ({ angle: g.angle, c0: g.c0, c1: g.c1 })));
-      }
-
-      // Save the gradient currently in the editor to the palette (deduped by content).
-      function addSavedGradient() {
-        const c0 = normHex(state.gradientCustom.c0);
-        const c1 = normHex(state.gradientCustom.c1);
-        if (!c0 || !c1) return;
-        const angle = ((Math.round(state.gradientCustom.angle) % 360) + 360) % 360;
-        const key = gradientKey(angle, c0, c1);
-        if (savedGradients.some((g) => gradientKey(g.angle, g.c0, g.c1) === key)) return; // already saved
-        savedGradients.unshift({ id: gradientUid(), angle, c0, c1 });
-        if (savedGradients.length > MAX_SAVED_GRADIENTS) savedGradients = savedGradients.slice(0, MAX_SAVED_GRADIENTS);
-        persistGradients();
-        renderGradientSwatches();
-      }
-
-      function removeSavedGradient(id) {
-        savedGradients = savedGradients.filter((g) => g.id !== id);
-        persistGradients();
-        if (state.gradientId === id) { state.gradientId = "indigo"; scheduleRender(); }
-        renderGradientSwatches();
-      }
-
-      document.getElementById("saveGradientBtn").addEventListener("click", addSavedGradient);
-
-      renderGradientSwatches();
-
-      // Load the saved gradient palette from disk on open.
-      window.studio.getGradients().then((list) => {
-        if (!Array.isArray(list)) return;
-        savedGradients = list.map((g) => {
-          const c0 = normHex(g && g.c0);
-          const c1 = normHex(g && g.c1);
-          if (!c0 || !c1) return null;
-          let angle = Number(g && g.angle);
-          if (!Number.isFinite(angle)) angle = 135;
-          angle = ((Math.round(angle) % 360) + 360) % 360;
-          return { id: gradientUid(), angle, c0, c1 };
-        }).filter(Boolean).slice(0, MAX_SAVED_GRADIENTS);
-        renderGradientSwatches();
-      }).catch(() => {});
-
-      // Custom gradient editor inputs (start/end color + angle).
-      const gradAngle = document.getElementById("gradAngle");
-      const gradAngleValue = document.getElementById("gradAngleValue");
-      function bindGradientColor(colorId, hexId, key) {
-        const colorEl = document.getElementById(colorId);
-        const hexEl = document.getElementById(hexId);
-        colorEl.addEventListener("input", () => {
-          state.gradientCustom[key] = colorEl.value;
-          hexEl.value = colorEl.value.toUpperCase();
-          refreshCustomSwatch();
-          scheduleRender();
-        });
-        hexEl.addEventListener("input", () => {
-          const v = hexEl.value.trim();
-          if (/^#?[0-9a-fA-F]{6}$/.test(v)) {
-            const hex = v.startsWith("#") ? v : "#" + v;
-            state.gradientCustom[key] = hex;
-            colorEl.value = hex;
-            refreshCustomSwatch();
-            scheduleRender();
-          }
-        });
-      }
-      bindGradientColor("gradC0", "gradC0Hex", "c0");
-      bindGradientColor("gradC1", "gradC1Hex", "c1");
-      gradAngle.addEventListener("input", () => {
-        state.gradientCustom.angle = +gradAngle.value;
-        gradAngleValue.textContent = gradAngle.value + "°";
-        refreshCustomSwatch();
-        scheduleRender();
-      });
-
-      buildSwatches(
-        document.getElementById("wallpaperSwatches"), WALLPAPERS, wallpaperCss,
-        () => state.wallpaperId, (id) => { state.wallpaperId = id; }
-      );
-
-      /* ───────────────────────── Background tabs ───────────────────────── */
-      const bgPanels = {
-        gradient: document.getElementById("gradientSwatches"),
-        wallpaper: document.getElementById("wallpaperSwatches"),
-        solid: document.getElementById("solidPanel"),
-        image: document.getElementById("imagePanel"),
-      };
-      function setBgMode(mode) {
-        state.bgMode = mode;
-        document.querySelectorAll("#bgTabs .seg").forEach((b) => b.classList.toggle("active", b.dataset.bg === mode));
-        for (const key in bgPanels) bgPanels[key].classList.toggle("hidden", key !== mode);
-        updateGradientCustomVisibility();
-        scheduleRender();
-      }
-      document.querySelectorAll("#bgTabs .seg").forEach((b) => {
-        b.addEventListener("click", () => setBgMode(b.dataset.bg));
-      });
-
-      /* ───────────────────────── Solid color + saved palette ───────────────────────── */
-      const solidColor = document.getElementById("solidColor");
-      const solidHex = document.getElementById("solidHex");
-      const solidPalette = document.getElementById("solidPalette");
-      const MAX_SAVED_COLORS = 24;
-      let savedColors = [];
-
-      function normHex(v) {
-        const s = String(v == null ? "" : v).trim();
-        if (!/^#?[0-9a-fA-F]{6}$/.test(s)) return null;
-        return (s.startsWith("#") ? s : "#" + s).toUpperCase();
-      }
-
-      function renderPalette() {
-        solidPalette.innerHTML = "";
-        const current = normHex(state.solidColor);
-        for (const hex of savedColors) {
-          const el = document.createElement("div");
-          el.className = "pal" + (hex === current ? " active" : "");
-          el.style.background = hex;
-          el.dataset.hex = hex;
-          el.title = hex;
-          el.addEventListener("click", () => applySolid(hex, false));
-          const rm = document.createElement("div");
-          rm.className = "remove";
-          rm.textContent = "×";
-          rm.title = "Remove from palette";
-          rm.addEventListener("click", (e) => { e.stopPropagation(); removeSavedColor(hex); });
-          el.appendChild(rm);
-          solidPalette.appendChild(el);
-        }
-      }
-
-      // Persist the whole palette (main process validates + caps it too).
-      function persistColors() { window.studio.saveColors(savedColors); }
-
-      // Add a color to the front of the palette (most-recent first), de-duped.
-      function addSavedColor(value) {
-        const hex = normHex(value);
-        if (!hex) return;
-        savedColors = savedColors.filter((c) => c !== hex);
-        savedColors.unshift(hex);
-        if (savedColors.length > MAX_SAVED_COLORS) savedColors = savedColors.slice(0, MAX_SAVED_COLORS);
-        persistColors();
-        renderPalette();
-      }
-
-      function removeSavedColor(hex) {
-        savedColors = savedColors.filter((c) => c !== hex);
-        persistColors();
-        renderPalette();
-      }
-
-      // Apply a solid color to state + inputs. addToPalette saves it for reuse.
-      function applySolid(value, addToPalette) {
-        const hex = normHex(value);
-        if (!hex) return;
-        state.solidColor = hex;
-        solidColor.value = hex;
-        solidHex.value = hex;
-        if (addToPalette) addSavedColor(hex);
-        else renderPalette();
-        scheduleRender();
-      }
-
-      // Live updates while dragging the picker / typing — no palette write yet.
-      solidColor.addEventListener("input", () => {
-        state.solidColor = solidColor.value;
-        solidHex.value = solidColor.value.toUpperCase();
-        renderPalette();
-        scheduleRender();
-      });
-      solidHex.addEventListener("input", () => {
-        const hex = normHex(solidHex.value);
-        if (hex) {
-          state.solidColor = hex;
-          solidColor.value = hex;
-          renderPalette();
-          scheduleRender();
-        }
-      });
-      // Commit (picker closed / field blurred) saves the color to the palette.
-      solidColor.addEventListener("change", () => addSavedColor(solidColor.value));
-      solidHex.addEventListener("change", () => addSavedColor(solidHex.value));
-
-      // Load the saved palette from disk on open.
-      window.studio.getColors().then((colors) => {
-        if (Array.isArray(colors)) {
-          savedColors = colors.map(normHex).filter(Boolean).slice(0, MAX_SAVED_COLORS);
-          renderPalette();
-        }
-      }).catch(() => {});
-
-      /* ───────────────────────── Image upload ───────────────────────── */
-      const fileInput = document.getElementById("fileInput");
-      const uploadBtn = document.getElementById("uploadBtn");
-      const uploadLabel = document.getElementById("uploadLabel");
-      uploadBtn.addEventListener("click", () => fileInput.click());
-      fileInput.addEventListener("change", () => {
-        const file = fileInput.files && fileInput.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const im = new Image();
-          im.onload = () => {
-            state.customImage = im;
-            uploadBtn.classList.add("has-image");
-            uploadLabel.textContent = file.name.length > 24 ? file.name.slice(0, 22) + "…" : file.name;
-            scheduleRender();
-          };
-          im.src = reader.result;
-        };
-        reader.readAsDataURL(file);
-      });
-
-      /* ───────────────────────── Frame tabs ───────────────────────── */
-      const browserOptions = document.getElementById("browserOptions");
-      document.querySelectorAll("#frameTabs .seg").forEach((b) => {
-        b.addEventListener("click", () => {
-          state.frame = b.dataset.frame;
-          document.querySelectorAll("#frameTabs .seg").forEach((s) => s.classList.toggle("active", s === b));
-          browserOptions.classList.toggle("hidden", state.frame !== "browser");
-          scheduleRender();
-        });
-      });
-      document.querySelectorAll("#frameThemeTabs .seg").forEach((b) => {
-        b.addEventListener("click", () => {
-          state.frameTheme = b.dataset.theme;
-          document.querySelectorAll("#frameThemeTabs .seg").forEach((s) => s.classList.toggle("active", s === b));
-          scheduleRender();
-        });
-      });
-      const urlInput = document.getElementById("urlInput");
-      urlInput.addEventListener("input", () => { state.url = urlInput.value; scheduleRender(); });
-
-      /* ───────────────────────── Aspect ───────────────────────── */
-      document.querySelectorAll("#aspectTabs .seg").forEach((b) => {
-        b.addEventListener("click", () => {
-          state.aspect = b.dataset.aspect;
-          document.querySelectorAll("#aspectTabs .seg").forEach((s) => s.classList.toggle("active", s === b));
-          scheduleRender();
-        });
-      });
-
-      /* ───────────────────────── Sliders ───────────────────────── */
-      function bindSlider(rangeId, valueId, max, apply) {
-        const range = document.getElementById(rangeId);
-        const value = document.getElementById(valueId);
-        range.addEventListener("input", () => {
-          value.textContent = range.value;
-          apply(range.value / 100);
-          scheduleRender();
-        });
-      }
-      bindSlider("padRange", "padValue", 100, (f) => { state.padPct = f * 0.25; });
-      bindSlider("radiusRange", "radiusValue", 100, (f) => { state.radiusPct = f * 0.05; });
-      bindSlider("shadowRange", "shadowValue", 100, (f) => { state.shadowPct = f * 0.12; });
-
-      /* ───────────────────────── Actions ───────────────────────── */
-      document.getElementById("cancelBtn").addEventListener("click", () => window.studio.cancel());
-      document.getElementById("copyBtn").addEventListener("click", () => exportTo(window.studio.copy));
-      document.getElementById("saveBtn").addEventListener("click", () => exportTo(window.studio.save));
-
-      document.addEventListener("keydown", (e) => {
-        if (e.target && (e.target.tagName === "INPUT")) {
-          if (e.key === "Escape") e.target.blur();
-          return;
-        }
-        if (e.key === "Escape") { window.studio.cancel(); return; }
-        const mod = e.ctrlKey || e.metaKey;
-        if (mod && (e.key === "s" || e.key === "S")) { e.preventDefault(); exportTo(window.studio.save); }
-        if (mod && (e.key === "c" || e.key === "C")) { e.preventDefault(); exportTo(window.studio.copy); }
-      });
-
-      window.addEventListener("resize", scheduleRender);
-
-      /* ───────────────────────── Subject image (import / load) ───────────────────────── */
-      const emptyState = document.getElementById("emptyState");
-      const importInput = document.getElementById("importInput");
-      const importBtn = document.getElementById("importBtn");
-
-      // Toggle the import prompt vs the live canvas based on whether we have an image.
-      function updateEmptyState() {
-        const has = !!imgW && !!imgH;
-        emptyState.classList.toggle("hidden", has);
-        previewCanvas.classList.toggle("hidden", !has);
-      }
-
-      function loadBaseImage(dataUrl) {
-        if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) return;
-        baseImg.onerror = () => console.error("Failed to load studio image");
-        baseImg.onload = () => {
-          imgW = baseImg.naturalWidth;
-          imgH = baseImg.naturalHeight;
-          updateEmptyState();
-          scheduleRender();
-        };
-        baseImg.src = dataUrl;
-      }
-
-      function importImageFile(file) {
-        if (!file || !file.type || !file.type.startsWith("image/")) return;
-        const reader = new FileReader();
-        reader.onload = () => loadBaseImage(reader.result);
-        reader.readAsDataURL(file);
-      }
-
-      importBtn.addEventListener("click", () => importInput.click());
-      emptyState.addEventListener("click", () => importInput.click());
-      importInput.addEventListener("change", () => {
-        importImageFile(importInput.files && importInput.files[0]);
-        importInput.value = "";
-      });
-
-      // Prevent the window from navigating to a file dropped outside the zone.
-      window.addEventListener("dragover", (e) => e.preventDefault());
-      window.addEventListener("drop", (e) => e.preventDefault());
-
-      // Drag & drop an image anywhere over the preview to set the subject.
-      previewArea.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        previewArea.classList.add("dragover");
-      });
-      previewArea.addEventListener("dragleave", (e) => {
-        if (e.target === previewArea) previewArea.classList.remove("dragover");
-      });
-      previewArea.addEventListener("drop", (e) => {
-        e.preventDefault();
-        previewArea.classList.remove("dragover");
-        const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-        importImageFile(file);
-      });
-
-      updateEmptyState();
-
-      // Seed image handed over from the main process (when launched from a
-      // capture / clipboard). Studio can also be opened empty and import later.
-      window.studio.onLoad((data) => loadBaseImage(data && data.imageDataUrl));
-    </script>
+    <div class="toast" id="toast"></div>
+
+    <div class="help-overlay" id="helpOverlay">
+      <div class="help-card">
+        <h3>Keyboard shortcuts</h3>
+        <h4>Tools</h4>
+        <div class="help-row"><span>Pointer / draw / arrow / shape</span><kbd>V</kbd> <kbd>D</kbd> <kbd>A</kbd> <kbd>S</kbd></div>
+        <div class="help-row"><span>Text / redact / callout</span><kbd>T</kbd> <kbd>X</kbd> <kbd>C</kbd></div>
+        <div class="help-row"><span>Cursor stamp / crop</span><kbd>P</kbd> <kbd>R</kbd></div>
+        <div class="help-row"><span>Undo / redo</span><kbd>Ctrl Z</kbd> <kbd>Ctrl Y</kbd></div>
+        <h4>Image</h4>
+        <div class="help-row"><span>Save</span><kbd>Ctrl S</kbd></div>
+        <div class="help-row"><span>Copy to clipboard</span><kbd>Ctrl C</kbd></div>
+        <div class="help-row"><span>Paste image to import</span><kbd>Ctrl V</kbd></div>
+        <h4>Clip</h4>
+        <div class="help-row"><span>Play / pause</span><kbd>Space</kbd></div>
+        <div class="help-row"><span>Set trim start / end</span><kbd>I</kbd> <kbd>O</kbd></div>
+        <div class="help-row"><span>Step one frame</span><kbd>← →</kbd></div>
+        <div class="help-row"><span>Jump one second</span><kbd>Shift ← →</kbd></div>
+        <div class="help-row"><span>Export</span><kbd>Ctrl E</kbd></div>
+        <div class="help-row"><span>Delete selected zoom</span><kbd>Del</kbd></div>
+        <h4>Window</h4>
+        <div class="help-row"><span>Deselect / cancel / close</span><kbd>Esc</kbd></div>
+      </div>
+    </div>
+
+    <!-- Hidden source video, used when the source is a clip -->
+    <video id="srcVideo" style="position: fixed; left: -9999px; width: 1px; height: 1px;" playsinline></video>
+
+    <script src="studio/presets.js"></script>
+    <script src="studio/state.js"></script>
+    <script src="studio/scene.js"></script>
+    <script src="studio/motion.js"></script>
+    <script src="studio/annotate.js"></script>
+    <script src="studio/sidebar.js"></script>
+    <script src="studio/video.js"></script>
+    <script src="studio/app.js"></script>
   </body>
 </html>

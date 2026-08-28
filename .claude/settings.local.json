@@ -39,7 +39,17 @@
       "Bash(cargo build:*)",
       "Bash(node -c c:/Users/morte/Documents/GitHub/qgn.app/main.js)",
       "Bash(grep -E '\\\\.\\(js|html|json\\)$')",
-      "Bash(node -c main.js)"
+      "Bash(node -c main.js)",
+      "PowerShell(npm install uiohook-napi@^1.5.4)",
+      "Bash(ls node_modules/uiohook-napi/prebuilds/)",
+      "Bash(ls node_modules/uiohook-napi/build)",
+      "Bash(node -e \"console.log\\(Object.keys\\(require\\('./node_modules/uiohook-napi/package.json'\\)\\).join\\(','\\)\\)\")",
+      "Bash(node -e \"const m=require\\('./node_modules/uiohook-napi'\\); console.log\\('exports:', Object.keys\\(m\\)\\); console.log\\('EventType:', JSON.stringify\\(m.EventType\\)\\); console.log\\('uIOhook methods:', m.uIOhook ? Object.getOwnPropertyNames\\(Object.getPrototypeOf\\(m.uIOhook\\)\\).join\\(','\\) : 'n/a'\\);\")",
+      "Bash(node --check main.js)",
+      "Bash(node --check record-preload.js)",
+      "Bash(node -e ' *)",
+      "Bash(node --check video-studio-preload.js)",
+      "PowerShell($env:ELECTRON_RUN_AS_NODE=1; & node_modules\\\\.bin\\\\electron.cmd -e \"try{const m=require\\('uiohook-napi'\\);console.log\\('LOADED uiohook-napi under Electron ABI; has uIOhook:', !!m.uIOhook\\);}catch\\(e\\){console.error\\('LOAD FAILED:', e.message\\);process.exit\\(1\\);}\")"
     ]
   }
 }

@@ -15,6 +15,9 @@ const {
 } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const { assembleAnimation } = require("./lib/animation.js");
+const { sanitizeStudioColors, sanitizeStudioGradients, DEFAULT_STUDIO_COLORS } = require("./lib/palette.js");
+const { STUDIO_VIDEO_EXTS, fileExt, videoMimeForPath, canOpenInStudio } = require("./lib/media.js");
 // Lazy-loaded to avoid crash when running in CLI mode
 let _autoUpdater;
 function getAutoUpdater() {
@@ -29,11 +32,13 @@ const PREVIEW_MARGIN = 20;
 const PREVIEW_GAP = 8;
 const TOAST_OFFSET_Y = 120;
 const TOAST_DURATION_MS = 3100;
-const ANNOTATION_AREA_FRACTION = 0.85;
-const ANNOTATION_PAD = 80;
-const ANNOTATION_TOOLBAR_H = 48;
-const MIN_ANNOTATION_W = 660;
-const MIN_ANNOTATION_H = 400;
+// Markup-mode Studio windows open sized to the image, the way the old
+// annotation editor did. Compose and clip windows open as a full workspace.
+const MARKUP_AREA_FRACTION = 0.85;
+const MARKUP_PAD = 80;
+const MARKUP_CHROME_H = 94; // top bar + tool rail
+const MIN_MARKUP_W = 720;
+const MIN_MARKUP_H = 420;
 const PREVIEW_MIN_IMG_H = 80;
 const PREVIEW_MAX_IMG_H = 200;
 const BOUNDS_DEBOUNCE_MS = 200;
@@ -134,57 +139,10 @@ function getRecordCountdown() {
   return Number.isFinite(v) && v >= 0 ? v : 3;
 }
 
-// Studio's saved solid-color palette. Seeded with a few defaults until the user
-// curates their own (any of these can be removed in the editor).
-const DEFAULT_STUDIO_COLORS = ["#6366F1", "#0F172A", "#FFFFFF", "#10B981", "#F43F5E", "#F59E0B"];
-const MAX_STUDIO_COLORS = 24;
-
-// Validate + de-duplicate a list of "#rrggbb" hex strings (case-insensitive),
-// capped to MAX_STUDIO_COLORS. Used both when reading and writing the palette.
-function sanitizeStudioColors(list) {
-  if (!Array.isArray(list)) return null;
-  const seen = new Set();
-  const clean = [];
-  for (const c of list) {
-    if (typeof c !== "string" || !/^#[0-9a-fA-F]{6}$/.test(c)) continue;
-    const upper = c.toUpperCase();
-    if (seen.has(upper)) continue;
-    seen.add(upper);
-    clean.push(upper);
-    if (clean.length >= MAX_STUDIO_COLORS) break;
-  }
-  return clean;
-}
-
 function getStudioColors() {
   const cleaned = sanitizeStudioColors(loadSettings().studioColors);
   // Distinguish "no palette saved yet" (use defaults) from "saved empty palette".
   return cleaned === null ? DEFAULT_STUDIO_COLORS.slice() : cleaned;
-}
-
-const MAX_STUDIO_GRADIENTS = 24;
-
-// Validate + de-duplicate a list of custom gradients ({angle, c0, c1}),
-// capped to MAX_STUDIO_GRADIENTS. Angle is normalized to 0–359.
-function sanitizeStudioGradients(list) {
-  if (!Array.isArray(list)) return null;
-  const isHex = (c) => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c);
-  const seen = new Set();
-  const clean = [];
-  for (const g of list) {
-    if (!g || typeof g !== "object" || !isHex(g.c0) || !isHex(g.c1)) continue;
-    const c0 = g.c0.toUpperCase();
-    const c1 = g.c1.toUpperCase();
-    let angle = Number(g.angle);
-    if (!Number.isFinite(angle)) angle = 135;
-    angle = ((Math.round(angle) % 360) + 360) % 360;
-    const key = `${angle}|${c0}|${c1}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    clean.push({ angle, c0, c1 });
-    if (clean.length >= MAX_STUDIO_GRADIENTS) break;
-  }
-  return clean;
 }
 
 function getStudioGradients() {
@@ -296,18 +254,19 @@ let previewWindows = [];
 let previewDisplay = null;
 let micDropdownWindow = null;
 let selectedMicId = "default";
-let annotationWindow = null;
-let annotationSourcePreview = null;
-let studioWindow = null;
-let studioSourcePreview = null;
-let videoStudioWindow = null;
-let videoStudioSource = null;
+// Every Studio window, keyed by BrowserWindow, with the capture it came from
+// and the mode it was opened in. Studio is no longer a singleton: annotating a
+// screenshot and framing a clip at the same time is a normal thing to do.
+const studioWindows = new Map();
 let updateWindow = null;
 let welcomeWindow = null;
 let starWindow = null;
 let pinnedDataDir;
 let pinnedManifestPath;
 let isQuitting = false;
+// Temp PNGs materialized for drag-out when save-to-disk is off. Removed on
+// quit so they don't pile up in the user's temp folder forever.
+const dragTempFiles = new Set();
 
 // Debounce timers for preview bounds persistence
 const boundsDebounceTimers = new Map();
@@ -326,8 +285,12 @@ function loadPinnedManifest() {
   }
 }
 
+// Written atomically: a crash mid-write would otherwise leave a truncated
+// manifest, which reads back as "no pins" and silently loses every pinned card.
 function savePinnedManifest(manifest) {
-  fs.writeFileSync(pinnedManifestPath, JSON.stringify(manifest, null, 2));
+  const tmp = pinnedManifestPath + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(manifest, null, 2));
+  fs.renameSync(tmp, pinnedManifestPath);
 }
 
 function persistPin(entry) {
@@ -443,6 +406,7 @@ function restorePinnedPreviews() {
           imgHeight,
           pinned: true,
           isVideo: isVideo || false,
+          canStudio: canOpenInStudio(entry),
         });
       }
     });
@@ -504,9 +468,12 @@ function createOverlay() {
 function showOverlay() {
   if (!overlayWindow || overlayWindow.isDestroyed() || !overlayReady) return;
 
-  // Toggle: dismiss if already active
+  // Toggle: dismiss if already active. A video setup owns extra windows (the
+  // control bar and its mic dropdown), so it has to be torn down through
+  // dismissVideoSetup or those would be left stranded on screen.
   if (overlayActive) {
-    hideOverlay();
+    if (recordingControlWindow || videoSourceId) dismissVideoSetup();
+    else hideOverlay();
     return;
   }
 
@@ -602,27 +569,9 @@ async function captureFullScreen() {
   }
 }
 
-// Open the annotation editor on whatever image is currently on the clipboard.
-function annotateClipboard() {
-  const image = clipboard.readImage();
-  if (image.isEmpty()) {
-    showErrorToast("No image on the clipboard to annotate");
-    return;
-  }
-  const png = image.toPNG();
-  openAnnotationEditor({
-    pngBuffer: new Uint8Array(png),
-    imgSize: image.getSize(),
-    window: null,
-    filePath: null,
-    isVideo: false,
-    pinnedImagePath: null,
-    fromClipboard: true,
-  });
-}
-
-// Open Studio on whatever image is currently on the clipboard.
-function studioClipboard() {
+// Open Studio on whatever image is currently on the clipboard, in either
+// markup or compose mode.
+function studioClipboard(mode) {
   const image = clipboard.readImage();
   if (image.isEmpty()) {
     showErrorToast("No image on the clipboard to open in Studio");
@@ -637,7 +586,7 @@ function studioClipboard() {
     isVideo: false,
     pinnedImagePath: null,
     fromClipboard: true,
-  });
+  }, { mode });
 }
 
 // kind: "saved" | "copied" | "error" | other (generic). For errors, `message`
@@ -838,10 +787,12 @@ function showPreview(pngBuffer, imgSize, filePath, isVideo = false) {
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   previewDisplay = display.workArea;
 
-  // Stack above existing previews
+  // Stack above the existing unpinned previews. Pinned cards have been moved
+  // out of the stack (they keep their own position), so counting them here
+  // would leave a gap that repositionPreviews later closes with a visible jump.
   let stackOffset = 0;
   for (const p of previewWindows) {
-    if (!p.window.isDestroyed()) {
+    if (!p.window.isDestroyed() && !p.pinned) {
       stackOffset += p.cardHeight + PREVIEW_GAP;
     }
   }
@@ -883,6 +834,7 @@ function showPreview(pngBuffer, imgSize, filePath, isVideo = false) {
         hasFile: !!filePath,
         imgHeight,
         isVideo,
+        canStudio: canOpenInStudio(entry),
         dismissSeconds: getDismissSeconds(),
       });
     }
@@ -916,187 +868,163 @@ function repositionPreviews() {
   }
 }
 
-function openAnnotationEditor(previewEntry) {
-  if (annotationWindow && !annotationWindow.isDestroyed()) {
-    annotationWindow.focus();
-    return;
-  }
+// ── Studio ──
+// One editor for stills and clips. `mode` is either "markup" (bare pixels,
+// written back over the source, what the annotation editor used to be) or
+// "compose" (framed on a background, saved as a brand-new file). Clips are
+// always composed: there is no writing a PNG back over an mp4.
 
-  const { imgSize } = previewEntry;
-  const display = screen.getPrimaryDisplay();
-  const workArea = display.workArea;
-
-  const maxW = Math.round(workArea.width * ANNOTATION_AREA_FRACTION);
-  const maxH = Math.round(workArea.height * ANNOTATION_AREA_FRACTION);
-  const scale = Math.min(1, (maxW - ANNOTATION_PAD) / imgSize.width, (maxH - ANNOTATION_TOOLBAR_H - ANNOTATION_PAD) / imgSize.height);
-
-  const winW = Math.max(MIN_ANNOTATION_W, Math.round(imgSize.width * scale) + ANNOTATION_PAD);
-  const winH = Math.max(MIN_ANNOTATION_H, Math.round(imgSize.height * scale) + ANNOTATION_TOOLBAR_H + ANNOTATION_PAD);
-
-  const x = workArea.x + Math.round((workArea.width - winW) / 2);
-  const y = workArea.y + Math.round((workArea.height - winH) / 2);
-
-  annotationWindow = new BrowserWindow({
-    width: winW,
-    height: winH,
-    x,
-    y,
-    frame: false,
-    transparent: false,
-    backgroundColor: "#1a1a1a",
-    resizable: false,
-    skipTaskbar: false,
-    alwaysOnTop: true,
-    show: false,
-    webPreferences: secureWebPrefs("annotation-preload.js"),
-  });
-
-  annotationWindow.setAlwaysOnTop(true, "screen-saver");
-  annotationWindow.loadFile("annotation.html");
-  annotationSourcePreview = previewEntry;
-
-  const imageDataUrl = `data:image/png;base64,${Buffer.from(previewEntry.pngBuffer).toString("base64")}`;
-
-  annotationWindow.once("ready-to-show", () => {
-    if (!annotationWindow.isDestroyed()) {
-      annotationWindow.show();
-      annotationWindow.webContents.send("load-image", { imageDataUrl });
-    }
-  });
-
-  annotationWindow.on("closed", () => {
-    annotationWindow = null;
-    annotationSourcePreview = null;
-  });
-}
-
-// Open the Studio editor — a larger workspace for composing the capture into a
-// framed mockup on a background. Unlike annotation, it produces a brand-new
-// image (different dimensions) rather than editing the source in place.
-function openStudio(previewEntry) {
-  if (studioWindow && !studioWindow.isDestroyed()) {
-    studioWindow.focus();
-    return;
-  }
-
-  const display = screen.getPrimaryDisplay();
-  const workArea = display.workArea;
-  const winW = Math.min(1280, Math.round(workArea.width * 0.92));
-  const winH = Math.round(workArea.height * 0.9);
-  const x = workArea.x + Math.round((workArea.width - winW) / 2);
-  const y = workArea.y + Math.round((workArea.height - winH) / 2);
-
-  studioWindow = new BrowserWindow({
-    width: winW,
-    height: winH,
-    minWidth: 900,
-    minHeight: 560,
-    x,
-    y,
-    frame: false,
-    backgroundColor: "#141414",
-    resizable: true,
-    skipTaskbar: false,
-    show: false,
-    webPreferences: secureWebPrefs("studio-preload.js"),
-  });
-
-  studioWindow.loadFile("studio.html");
-  studioSourcePreview = previewEntry || null;
-
-  studioWindow.once("ready-to-show", () => {
-    if (studioWindow.isDestroyed()) return;
-    studioWindow.show();
-    // Studio can be opened empty (the user imports an image inside) or seeded
-    // from a capture / clipboard image.
-    if (previewEntry && previewEntry.pngBuffer) {
-      const imageDataUrl = `data:image/png;base64,${Buffer.from(previewEntry.pngBuffer).toString("base64")}`;
-      studioWindow.webContents.send("load-image", { imageDataUrl });
-    }
-  });
-
-  studioWindow.on("closed", () => {
-    studioWindow = null;
-    studioSourcePreview = null;
-  });
-}
-
-// Map a video file extension to a MIME type for the renderer's Blob/<video>.
-function videoMimeForPath(filePath) {
-  const ext = path.extname(filePath || "").slice(1).toLowerCase();
-  if (ext === "webm") return "video/webm";
-  if (ext === "mov") return "video/quicktime";
-  if (ext === "mkv") return "video/x-matroska";
-  return "video/mp4";
-}
-
-// Open the Video Studio — the motion counterpart of Studio. It loads a recorded
-// clip, lets the user frame it on a background, trim it, and export a new
-// mp4/webm/gif/webp. Like Studio it produces a brand-new file, never edits the
-// source in place.
-function openVideoStudio(previewEntry) {
-  if (videoStudioWindow && !videoStudioWindow.isDestroyed()) {
-    videoStudioWindow.focus();
-    return;
-  }
-
-  const filePath = previewEntry && previewEntry.filePath;
+// Read a recorded clip plus its paired motion sidecar. Fresh QGN recordings
+// have a sidecar; imported or older clips do not, and Studio degrades to no
+// motion. Returns null (and toasts) when the file can't be read.
+function readVideoPayload(filePath) {
   if (!filePath || !fs.existsSync(filePath)) {
     showErrorToast("Couldn't find the video file to edit");
+    return null;
+  }
+  if (!STUDIO_VIDEO_EXTS.has(fileExt(filePath))) {
+    showErrorToast("Studio can't reopen GIF or WebP animations");
+    return null;
+  }
+  let videoBytes;
+  try {
+    videoBytes = fs.readFileSync(filePath);
+  } catch (e) {
+    console.error("Failed to read source video:", e);
+    showErrorToast("Couldn't open the video in Studio");
+    return null;
+  }
+  let motionData = null;
+  try {
+    const motionPath = filePath.replace(/\.[^.]+$/, ".motion.json");
+    if (fs.existsSync(motionPath)) {
+      const parsed = JSON.parse(fs.readFileSync(motionPath, "utf8"));
+      if (parsed && Array.isArray(parsed.events)) motionData = parsed;
+    }
+  } catch (e) {
+    console.error("Failed to read motion sidecar:", e);
+  }
+  return {
+    kind: "video",
+    videoBytes: new Uint8Array(videoBytes),
+    mimeType: videoMimeForPath(filePath),
+    motion: motionData,
+  };
+}
+
+// Hand the source to an open Studio renderer. Returns false when there was
+// nothing loadable to send.
+function sendStudioSource(win, previewEntry, mode) {
+  if (!win || win.isDestroyed()) return false;
+  if (!previewEntry) {
+    win.webContents.send("studio-load", { kind: "none", mode });
+    return true;
+  }
+  if (previewEntry.isVideo) {
+    const payload = readVideoPayload(previewEntry.filePath);
+    if (!payload) return false;
+    win.webContents.send("studio-load", { ...payload, mode });
+    return true;
+  }
+  if (!previewEntry.pngBuffer) return false;
+  win.webContents.send("studio-load", {
+    kind: "image",
+    imageDataUrl: `data:image/png;base64,${Buffer.from(previewEntry.pngBuffer).toString("base64")}`,
+    mode,
+  });
+  return true;
+}
+
+// Markup opens sized to the image so it feels like a quick markup pass;
+// compose and clips open as a full workspace.
+function studioWindowBounds(previewEntry, mode) {
+  // Open on the display the user is actually working on, not always the
+  // primary one: a preview card lives on the monitor its capture came from.
+  const workArea = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  if (mode === "markup" && previewEntry && previewEntry.imgSize) {
+    const { width, height } = previewEntry.imgSize;
+    const maxW = Math.round(workArea.width * MARKUP_AREA_FRACTION);
+    const maxH = Math.round(workArea.height * MARKUP_AREA_FRACTION);
+    const scale = Math.min(1, (maxW - MARKUP_PAD) / width, (maxH - MARKUP_CHROME_H - MARKUP_PAD) / height);
+    const winW = Math.max(MIN_MARKUP_W, Math.round(width * scale) + MARKUP_PAD);
+    const winH = Math.max(MIN_MARKUP_H, Math.round(height * scale) + MARKUP_CHROME_H + MARKUP_PAD);
+    return {
+      width: winW,
+      height: winH,
+      x: workArea.x + Math.round((workArea.width - winW) / 2),
+      y: workArea.y + Math.round((workArea.height - winH) / 2),
+    };
+  }
+  const winW = Math.min(1280, Math.round(workArea.width * 0.92));
+  const winH = Math.round(workArea.height * 0.9);
+  return {
+    width: winW,
+    height: winH,
+    x: workArea.x + Math.round((workArea.width - winW) / 2),
+    y: workArea.y + Math.round((workArea.height - winH) / 2),
+  };
+}
+
+// Find an already-open Studio showing this exact capture, so a second click on
+// the same preview card focuses instead of stacking another window.
+function findStudioFor(previewEntry) {
+  for (const [win, entry] of studioWindows) {
+    if (win.isDestroyed()) continue;
+    if (!previewEntry) {
+      if (!entry.previewEntry) return win;
+      continue;
+    }
+    if (entry.previewEntry === previewEntry) return win;
+    // Opening the same file a second time (tray → "Open video in Studio…")
+    // builds a fresh entry object, so fall back to comparing paths.
+    if (entry.previewEntry && previewEntry.filePath &&
+        entry.previewEntry.filePath === previewEntry.filePath) return win;
+  }
+  return null;
+}
+
+function openStudio(previewEntry, opts = {}) {
+  const mode = previewEntry && previewEntry.isVideo ? "compose" : (opts.mode === "markup" ? "markup" : "compose");
+
+  const existing = findStudioFor(previewEntry || null);
+  if (existing) {
+    existing.focus();
     return;
   }
 
-  const display = screen.getPrimaryDisplay();
-  const workArea = display.workArea;
-  const winW = Math.min(1280, Math.round(workArea.width * 0.92));
-  const winH = Math.round(workArea.height * 0.9);
-  const x = workArea.x + Math.round((workArea.width - winW) / 2);
-  const y = workArea.y + Math.round((workArea.height - winH) / 2);
-
-  videoStudioWindow = new BrowserWindow({
-    width: winW,
-    height: winH,
-    minWidth: 900,
-    minHeight: 600,
-    x,
-    y,
+  const bounds = studioWindowBounds(previewEntry, mode);
+  const win = new BrowserWindow({
+    ...bounds,
+    minWidth: mode === "markup" ? 600 : 900,
+    minHeight: mode === "markup" ? 400 : 560,
     frame: false,
     backgroundColor: "#141414",
     resizable: true,
     skipTaskbar: false,
     show: false,
-    webPreferences: secureWebPrefs("video-studio-preload.js", { backgroundThrottling: false }),
+    webPreferences: secureWebPrefs("studio-preload.js", { backgroundThrottling: false }),
   });
 
-  videoStudioWindow.loadFile("video-studio.html");
-  videoStudioSource = previewEntry;
+  // A quick markup pass usually happens against something else on screen, so
+  // keep that window above the rest. Switching to compose drops it.
+  if (mode === "markup") win.setAlwaysOnTop(true, "screen-saver");
 
-  videoStudioWindow.once("ready-to-show", () => {
-    if (videoStudioWindow.isDestroyed()) return;
-    videoStudioWindow.show();
-    let videoBytes;
-    try {
-      videoBytes = fs.readFileSync(filePath);
-    } catch (e) {
-      console.error("Failed to read source video:", e);
-      showErrorToast("Couldn't open the video in Studio");
-      if (!videoStudioWindow.isDestroyed()) videoStudioWindow.destroy();
-      return;
-    }
-    videoStudioWindow.webContents.send("load-video", {
-      videoBytes: new Uint8Array(videoBytes),
-      mimeType: videoMimeForPath(filePath),
-    });
+  studioWindows.set(win, { previewEntry: previewEntry || null, mode });
+  win.loadFile("studio.html");
+
+  win.once("ready-to-show", () => {
+    if (win.isDestroyed()) return;
+    win.show();
+    // If the source vanished between opening and showing, don't leave an empty
+    // editor stranded.
+    if (!sendStudioSource(win, previewEntry, mode) && previewEntry) win.destroy();
   });
 
-  videoStudioWindow.on("closed", () => {
-    videoStudioWindow = null;
-    videoStudioSource = null;
-  });
+  win.on("closed", () => studioWindows.delete(win));
 }
 
-// Pick any existing video off disk and open it in the Video Studio (so clips
-// that have scrolled past their preview card can still be framed).
+// Pick any existing video off disk and open it in Studio (so clips that have
+// scrolled past their preview card can still be framed).
 async function openVideoFileInStudio() {
   const result = await dialog.showOpenDialog({
     title: "Open a video in Studio",
@@ -1105,12 +1033,167 @@ async function openVideoFileInStudio() {
     filters: [{ name: "Video", extensions: ["mp4", "webm", "mov", "mkv", "m4v"] }],
   });
   if (result.canceled || !result.filePaths.length) return;
-  openVideoStudio({ filePath: result.filePaths[0], isVideo: true });
+  openStudio({ filePath: result.filePaths[0], isVideo: true });
 }
 
 let videoSourceId = null;
 let videoScaleFactor = 1;
 let videoDisplaySize = { width: 0, height: 0 };
+let videoDisplayOrigin = { x: 0, y: 0 };
+
+// ── Mouse-motion capture ──
+// During a recording we log global mouse move/click/wheel events (via the
+// native uiohook module) so Studio can drive a synthetic cursor,
+// click ripples, and click-triggered auto-zoom. Coordinates are normalized to
+// the captured region [0..1] and timestamps are aligned to the video clock
+// (which excludes paused time, mirroring the renderer's MediaRecorder.pause()).
+let _uiohook; // lazily required; null once if it fails to load
+function getUiohook() {
+  if (_uiohook === undefined) {
+    try {
+      _uiohook = require("uiohook-napi");
+    } catch (e) {
+      console.error("uiohook-napi failed to load; motion capture disabled:", e);
+      _uiohook = null;
+    }
+  }
+  return _uiohook;
+}
+
+const motion = {
+  active: false, // hook is running
+  logging: false, // buffering events (false during pre-roll countdown / pause)
+  t0: 0, // Date.now() at video currentTime 0
+  pausedAccum: 0, // ms of paused time to subtract from timestamps
+  pauseStart: 0,
+  region: null, // { x, y, width, height } in physical px (display-relative)
+  displayOrigin: { x: 0, y: 0 }, // display top-left in physical px (global)
+  events: [],
+};
+let pendingMotion = null; // finalized capture, consumed by the next saveRecording
+
+// Map a raw global uiohook screen point (physical px on Windows) to the
+// recorded region's normalized space [0..1]. Returns null for points well
+// outside the region so stray desktop movement doesn't pollute the track.
+function normalizeMotionPoint(rawX, rawY) {
+  const r = motion.region;
+  if (!r || !(r.width > 0) || !(r.height > 0)) return null;
+  const physX = rawX - motion.displayOrigin.x;
+  const physY = rawY - motion.displayOrigin.y;
+  const nx = (physX - r.x) / r.width;
+  const ny = (physY - r.y) / r.height;
+  if (nx < -0.2 || nx > 1.2 || ny < -0.2 || ny > 1.2) return null;
+  const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+  return { x: clamp01(nx), y: clamp01(ny) };
+}
+
+function motionTime() {
+  // A pause that is still open counts too, otherwise stopping while paused
+  // would report a duration that includes the paused stretch.
+  const openPause = motion.pauseStart ? Date.now() - motion.pauseStart : 0;
+  return Math.max(0, (Date.now() - motion.t0 - motion.pausedAccum - openPause) / 1000);
+}
+
+function pushMotionEvent(type, rawX, rawY, extra) {
+  if (!motion.logging) return;
+  const p = normalizeMotionPoint(rawX, rawY);
+  if (!p) return;
+  // Cap the buffer so a very long recording can't grow unbounded (~30min at a
+  // busy 250 evt/s is comfortably under this).
+  if (motion.events.length >= 500000) return;
+  motion.events.push({ t: +motionTime().toFixed(3), type, x: +p.x.toFixed(4), y: +p.y.toFixed(4), ...extra });
+}
+
+// Begin listening. `region` and `displayOrigin` are physical-px anchors from
+// showOverlayForVideo/beginVideoRecording. Buffering stays off until the
+// renderer signals recording actually started (post-countdown).
+function startMotionCapture(region, displayOrigin) {
+  const hook = getUiohook();
+  if (!hook || !hook.uIOhook) return;
+  motion.region = region;
+  motion.displayOrigin = displayOrigin || { x: 0, y: 0 };
+  motion.events = [];
+  motion.logging = false;
+  motion.pausedAccum = 0;
+  motion.pauseStart = 0;
+  motion.t0 = Date.now();
+  if (motion.active) return; // listeners already attached
+  const io = hook.uIOhook;
+  // A previous start that threw can leave listeners behind; clearing first
+  // keeps a retry from double-logging every event.
+  try { io.removeAllListeners(); } catch (_) {}
+  io.on("mousemove", (e) => pushMotionEvent("move", e.x, e.y));
+  io.on("mousedown", (e) => pushMotionEvent("down", e.x, e.y, { button: e.button }));
+  io.on("mouseup", (e) => pushMotionEvent("up", e.x, e.y, { button: e.button }));
+  io.on("wheel", (e) => pushMotionEvent("wheel", e.x, e.y, { dy: e.rotation }));
+  try {
+    io.start();
+    motion.active = true;
+  } catch (e) {
+    console.error("Failed to start uiohook:", e);
+    motion.active = false;
+    try { io.removeAllListeners(); } catch (_) {}
+  }
+}
+
+// Called when the renderer reports the MediaRecorder actually started. `t0` is
+// the renderer's Date.now() at that instant (same wall clock), so motion
+// timestamps line up with video.currentTime.
+function markMotionStarted(t0) {
+  if (!motion.active) return;
+  motion.t0 = typeof t0 === "number" && t0 > 0 ? t0 : Date.now();
+  motion.pausedAccum = 0;
+  motion.logging = true;
+}
+
+function pauseMotionCapture() {
+  if (!motion.logging) return;
+  motion.logging = false;
+  motion.pauseStart = Date.now();
+}
+
+function resumeMotionCapture() {
+  if (!motion.active || motion.pauseStart === 0) return;
+  motion.pausedAccum += Date.now() - motion.pauseStart;
+  motion.pauseStart = 0;
+  motion.logging = true;
+}
+
+// Stop the hook and finalize the buffer into `pendingMotion` for the imminent
+// saveRecording. Returns nothing; safe to call when inactive.
+function stopMotionCapture() {
+  if (!motion.active) {
+    pendingMotion = null;
+    return;
+  }
+  const hook = getUiohook();
+  try {
+    if (hook && hook.uIOhook) {
+      hook.uIOhook.stop();
+      hook.uIOhook.removeAllListeners();
+    }
+  } catch (e) {
+    console.error("Failed to stop uiohook:", e);
+  }
+  const duration = motionTime();
+  pendingMotion =
+    motion.region && motion.events.length > 0
+      ? {
+          version: 1,
+          recordedAt: new Date().toISOString(),
+          region: { ...motion.region },
+          scaleFactor: videoScaleFactor,
+          duration: +duration.toFixed(3),
+          events: motion.events,
+        }
+      : null;
+  motion.active = false;
+  motion.logging = false;
+  motion.pauseStart = 0;
+  motion.pausedAccum = 0;
+  motion.events = [];
+  motion.region = null;
+}
 
 async function showOverlayForVideo() {
   if (!overlayWindow || overlayWindow.isDestroyed() || !overlayReady) return;
@@ -1139,6 +1222,12 @@ async function showOverlayForVideo() {
   videoDisplaySize = {
     width: Math.round(display.bounds.width * display.scaleFactor),
     height: Math.round(display.bounds.height * display.scaleFactor),
+  };
+  // Physical-px global origin of the capture display, so raw uiohook screen
+  // coordinates can be made display-relative for motion normalization.
+  videoDisplayOrigin = {
+    x: Math.round(display.bounds.x * display.scaleFactor),
+    y: Math.round(display.bounds.y * display.scaleFactor),
   };
 
   // Get source ID up front so it's ready when user finishes selecting
@@ -1199,6 +1288,9 @@ async function showOverlayForVideo() {
     }
     if (isRecording) {
       isRecording = false;
+      // Recording bar closed mid-capture (abort): tear down the motion hook too.
+      stopMotionCapture();
+      pendingMotion = null;
       if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayWindow.webContents.send("overlay-hide-rec-border");
         overlayWindow.setContentProtection(false);
@@ -1242,6 +1334,18 @@ function dismissVideoSetup() {
 function beginVideoRecording(region) {
   if (!videoSourceId || !recordingControlWindow) return;
 
+  // The region comes from the overlay renderer; a malformed one would produce a
+  // zero-sized capture canvas and a silently broken recording.
+  const validRegion =
+    region &&
+    [region.x, region.y, region.width, region.height].every((n) => Number.isFinite(n)) &&
+    region.width >= 1 && region.height >= 1;
+  if (!validRegion) {
+    dismissVideoSetup();
+    showErrorToast("That selection was too small to record");
+    return;
+  }
+
   isRecording = true;
 
   // Show recording border on overlay
@@ -1262,6 +1366,17 @@ function beginVideoRecording(region) {
     height: recBounds.height,
   });
 
+  const physicalRegion = {
+    x: Math.round(region.x * videoScaleFactor),
+    y: Math.round(region.y * videoScaleFactor),
+    width: Math.round(region.width * videoScaleFactor),
+    height: Math.round(region.height * videoScaleFactor),
+  };
+
+  // Begin global mouse capture now; buffering waits for "recording-started"
+  // (fired by the renderer after any pre-roll countdown).
+  startMotionCapture(physicalRegion, videoDisplayOrigin);
+
   recordingControlWindow.webContents.send("start-recording", {
     sourceId: videoSourceId,
     countdown: getRecordCountdown(),
@@ -1269,18 +1384,18 @@ function beginVideoRecording(region) {
       width: videoDisplaySize.width,
       height: videoDisplaySize.height,
     },
-    region: {
-      x: Math.round(region.x * videoScaleFactor),
-      y: Math.round(region.y * videoScaleFactor),
-      width: Math.round(region.width * videoScaleFactor),
-      height: Math.round(region.height * videoScaleFactor),
-    },
+    region: physicalRegion,
   });
 
   videoSourceId = null;
 }
 
 function stopRecordingUI() {
+  // Ensure the motion hook is torn down; discard any buffer not already
+  // consumed by a save (e.g. a cancelled recording).
+  stopMotionCapture();
+  pendingMotion = null;
+
   // Hide the recording border and restore overlay state
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     overlayWindow.webContents.send("overlay-hide-rec-border");
@@ -1296,7 +1411,7 @@ function stopRecordingUI() {
 
 // Write a video/animation buffer to the save folder and surface it the same way
 // a fresh recording is: a preview card (with its captured thumbnail) or a toast.
-// Shared by the recorder and the Video Studio. Returns the written path.
+// Shared by the recorder and Studio's clip export. Returns the written path.
 function writeVideoFile(buffer, ext, thumbnailDataUrl) {
   const folder = getSaveFolder();
   fs.mkdirSync(folder, { recursive: true });
@@ -1304,6 +1419,18 @@ function writeVideoFile(buffer, ext, thumbnailDataUrl) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const filePath = path.join(folder, `qgn-${timestamp}.${ext}`);
   fs.writeFileSync(filePath, Buffer.from(buffer));
+
+  // Pair a motion sidecar with a fresh recording (only when we captured events;
+  // Studio re-exports leave pendingMotion null and get no sidecar).
+  if (pendingMotion) {
+    try {
+      const motionPath = filePath.replace(/\.[^.]+$/, ".motion.json");
+      fs.writeFileSync(motionPath, JSON.stringify(pendingMotion));
+    } catch (e) {
+      console.error("Failed to write motion sidecar:", e);
+    }
+    pendingMotion = null;
+  }
 
   if (thumbnailDataUrl && /^data:image\/png;base64,/.test(thumbnailDataUrl)) {
     const base64 = thumbnailDataUrl.replace(/^data:image\/png;base64,/, "");
@@ -1319,6 +1446,9 @@ function writeVideoFile(buffer, ext, thumbnailDataUrl) {
 
 function saveRecording(data, thumbnailDataUrl, format) {
   try {
+    // Finalize the motion buffer into pendingMotion before writing, so
+    // writeVideoFile can drop the sidecar next to the video.
+    stopMotionCapture();
     const ext = format === "mp4" ? "mp4" : "webm";
     writeVideoFile(data, ext, thumbnailDataUrl);
     stopRecordingUI();
@@ -1348,9 +1478,9 @@ function rebuildTrayMenu() {
     { label: `Capture (${hotkeyToLabel(hk.capture)})`, click: showOverlay },
     { label: `Record (${hotkeyToLabel(hk.record)})`, click: showOverlayForVideo },
     { label: "Capture full screen", click: captureFullScreen },
-    { label: "Annotate clipboard image", click: annotateClipboard },
     { label: "Open Studio", click: () => openStudio() },
-    { label: "Open clipboard image in Studio", click: studioClipboard },
+    { label: "Annotate clipboard image", click: () => studioClipboard("markup") },
+    { label: "Open clipboard image in Studio", click: () => studioClipboard("compose") },
     { label: "Open video in Studio...", click: openVideoFileInStudio },
     { type: "separator" },
     { label: "Settings...", click: toggleSettingsWindow },
@@ -1463,6 +1593,13 @@ function showUpdateToast() {
   });
 }
 
+// The version string comes from the update feed, so it is validated before it
+// is ever pasted into a URL. Null means "don't show a version".
+let pendingUpdateVersion = null;
+function validVersion(v) {
+  return typeof v === "string" && /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(v) ? v : null;
+}
+
 function setupAutoUpdater() {
   getAutoUpdater().autoDownload = true;
   getAutoUpdater().autoInstallOnAppQuit = true;
@@ -1486,8 +1623,15 @@ function setupAutoUpdater() {
     }
   }
 
-  getAutoUpdater().on("update-available", () => {
-    pendingStatus = { status: "downloading", percent: 0 };
+  getAutoUpdater().on("update-available", (info) => {
+    // A repeated check must not leave the previous watchdog running, or it
+    // would fire a bogus "timed out" over a healthy download.
+    if (downloadStallTimer) {
+      clearTimeout(downloadStallTimer);
+      downloadStallTimer = null;
+    }
+    pendingUpdateVersion = validVersion(info && info.version);
+    pendingStatus = { status: "downloading", percent: 0, version: pendingUpdateVersion };
     showUpdateToast();
     if (updateWindow && !updateWindow.isDestroyed()) {
       updateWindow.webContents.once("did-finish-load", onUpdateWindowReady);
@@ -1501,18 +1645,19 @@ function setupAutoUpdater() {
   });
 
   getAutoUpdater().on("download-progress", (progress) => {
-    sendUpdateStatus({ status: "downloading", percent: progress.percent });
+    sendUpdateStatus({ status: "downloading", percent: progress.percent, version: pendingUpdateVersion });
   });
 
-  getAutoUpdater().on("update-downloaded", () => {
+  getAutoUpdater().on("update-downloaded", (info) => {
     if (downloadStallTimer) {
       clearTimeout(downloadStallTimer);
       downloadStallTimer = null;
     }
+    pendingUpdateVersion = validVersion(info && info.version) || pendingUpdateVersion;
     if (updateWindow && !updateWindow.isDestroyed()) {
-      sendUpdateStatus({ status: "ready" });
+      sendUpdateStatus({ status: "ready", version: pendingUpdateVersion });
     } else {
-      pendingStatus = { status: "ready" };
+      pendingStatus = { status: "ready", version: pendingUpdateVersion };
       showUpdateToast();
       if (updateWindow && !updateWindow.isDestroyed()) {
         updateWindow.webContents.once("did-finish-load", onUpdateWindowReady);
@@ -1641,6 +1786,14 @@ app.whenReady().then(() => {
     getAutoUpdater().quitAndInstall(false, true);
   });
 
+  // "What's new" on the update card: open the release page for the version
+  // being installed, which is where the release notes live.
+  ipcMain.on("update-notes", () => {
+    shell.openExternal(
+      pendingUpdateVersion ? `${REPO_URL}/releases/tag/v${pendingUpdateVersion}` : `${REPO_URL}/releases`
+    );
+  });
+
   ipcMain.on("update-dismiss", () => {
     if (updateWindow && !updateWindow.isDestroyed()) {
       updateWindow.destroy();
@@ -1720,6 +1873,12 @@ app.whenReady().then(() => {
   ipcMain.on("save-recording", (_event, data, thumbnail, format) => {
     saveRecording(data, thumbnail, format);
   });
+
+  // Motion-capture lifecycle, reported by the recorder so timestamps align with
+  // the video clock (which excludes paused time).
+  ipcMain.on("recording-started", (_event, startTime) => markMotionStarted(startTime));
+  ipcMain.on("recording-paused", () => pauseMotionCapture());
+  ipcMain.on("recording-resumed", () => resumeMotionCapture());
 
   ipcMain.on("open-mic-dropdown", () => {
     if (!micDropdownWindow || micDropdownWindow.isDestroyed()) return;
@@ -1811,18 +1970,23 @@ app.whenReady().then(() => {
   });
 
 
+  // The pencil opens Studio straight into markup; the Studio button opens it
+  // into compose. Same window either way.
   ipcMain.on("preview-edit", (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const entry = previewWindows.find((p) => p.window === win);
-    if (entry) openAnnotationEditor(entry);
+    if (entry) openStudio(entry, { mode: "markup" });
   });
 
   ipcMain.on("preview-studio", (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const entry = previewWindows.find((p) => p.window === win);
     if (!entry) return;
-    if (entry.isVideo) openVideoStudio(entry);
-    else openStudio(entry);
+    if (!canOpenInStudio(entry)) {
+      showErrorToast("Studio can't reopen GIF or WebP animations");
+      return;
+    }
+    openStudio(entry, { mode: "compose" });
   });
 
   ipcMain.on("preview-copy", (event) => {
@@ -1848,6 +2012,9 @@ app.whenReady().then(() => {
         filePath = path.join(app.getPath("temp"), `qgn-drag-${Date.now()}.png`);
         const image = nativeImage.createFromBuffer(Buffer.from(entry.pngBuffer));
         fs.writeFileSync(filePath, image.toPNG());
+        // Remember it so the session cleans up after itself on quit; the drop
+        // target has already copied the bytes by then.
+        dragTempFiles.add(filePath);
       } catch (e) {
         console.error("Failed to prepare drag file:", e);
         return;
@@ -1867,11 +2034,16 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.on("annotation-save", async (event, pngBuffer) => {
+  // Markup mode: the edited image replaces the original in place.
+  ipcMain.on("studio-overwrite", async (event, pngBuffer) => {
+    if (!(pngBuffer instanceof Uint8Array) && !Buffer.isBuffer(pngBuffer)) return;
     const image = nativeImage.createFromBuffer(Buffer.from(pngBuffer));
+    if (image.isEmpty()) return;
     copyToClipboard(image);
 
-    const src = annotationSourcePreview;
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const studio = studioWindows.get(win);
+    const src = studio ? studio.previewEntry : null;
 
     if (src && src.fromClipboard) {
       // Annotating a clipboard image: treat the result as a fresh capture
@@ -1905,12 +2077,6 @@ app.whenReady().then(() => {
       }
     }
 
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (win && !win.isDestroyed()) win.destroy();
-  });
-
-  ipcMain.on("annotation-cancel", (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
     if (win && !win.isDestroyed()) win.destroy();
   });
 
@@ -1927,13 +2093,27 @@ app.whenReady().then(() => {
     // The composed mockup is a new image (background + frame, different size),
     // so treat it as a fresh capture rather than overwriting the source.
     handleCaptureData(Buffer.from(pngBuffer));
+    // The export replaces the source visually, so retire the originating preview
+    // card instead of leaving a stale duplicate alongside the new one.
     const win = BrowserWindow.fromWebContents(event.sender);
+    const studio = studioWindows.get(win);
+    const src = studio ? studio.previewEntry : null;
+    if (src && src.window && !src.window.isDestroyed()) src.window.close();
     if (win && !win.isDestroyed()) win.destroy();
   });
 
   ipcMain.on("studio-cancel", (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win && !win.isDestroyed()) win.destroy();
+  });
+
+  // Markup windows float above other apps; compose windows don't. The renderer
+  // owns the mode, so it tells us when that changes.
+  ipcMain.on("studio-set-always-on-top", (event, flag) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed() || !studioWindows.has(win)) return;
+    if (flag) win.setAlwaysOnTop(true, "screen-saver");
+    else win.setAlwaysOnTop(false);
   });
 
   ipcMain.handle("studio-get-colors", () => getStudioColors());
@@ -1950,10 +2130,10 @@ app.whenReady().then(() => {
     if (clean) saveSetting("studioGradients", clean);
   });
 
-  // ── Video Studio ──
+  // ── Clip export ──
   // A finished mp4/webm produced by the renderer's MediaRecorder: write it out
   // as a brand-new file (background + frame baked in), like a fresh recording.
-  ipcMain.on("vstudio-save-encoded", (event, payload) => {
+  ipcMain.on("studio-export-encoded", (event, payload) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     try {
       const bytes = payload && payload.bytes;
@@ -1962,60 +2142,36 @@ app.whenReady().then(() => {
       writeVideoFile(bytes, ext, payload.thumbnailDataUrl);
       if (win && !win.isDestroyed()) win.destroy();
     } catch (e) {
-      console.error("Failed to save Video Studio export:", e);
+      console.error("Failed to save Studio clip export:", e);
       showErrorToast("Couldn't save the video");
-      if (win && !win.isDestroyed()) win.webContents.send("vstudio-export-error", "Couldn't save the video.");
+      if (win && !win.isDestroyed()) win.webContents.send("studio-export-error", "Couldn't save the video.");
     }
   });
 
-  // A sequence of PNG frames to assemble into an animated GIF/WebP via sharp
-  // (libvips represents an animation as a vertical strip of equal-height pages).
-  ipcMain.on("vstudio-save-frames", async (event, payload) => {
+  // A sequence of PNG frames to assemble into an animated GIF/WebP. The
+  // assembly itself lives in lib/animation.js so it can be tested on its own.
+  ipcMain.on("studio-export-frames", async (event, payload) => {
     const win = BrowserWindow.fromWebContents(event.sender);
-    const fail = (msg) => {
-      console.error("Video Studio animation export failed:", msg);
-      showErrorToast("Couldn't render the " + (payload && payload.format === "webp" ? "WebP" : "GIF"));
-      if (win && !win.isDestroyed()) win.webContents.send("vstudio-export-error", "Couldn't render the animation.");
-    };
+    let result;
     try {
-      const { frames, delays, width, height, format, thumbnailDataUrl } = payload || {};
-      const isWebp = format === "webp";
-      if (format !== "gif" && !isWebp) return fail("bad format");
-      if (!Array.isArray(frames) || frames.length === 0 || frames.length > 1200) return fail("bad frame count");
-      const w = Math.round(width), h = Math.round(height);
-      if (!(w > 0 && h > 0 && w <= 4096 && h <= 4096)) return fail("bad dimensions");
-      // Guard against an unreasonable transient buffer (raw RGBA strip).
-      if (w * h * 4 * frames.length > 900 * 1024 * 1024) return fail("too large");
-
-      const sharp = require("sharp");
-      const expected = w * h * 4;
-      const rawFrames = [];
-      for (const f of frames) {
-        if (!(f instanceof Uint8Array) && !Buffer.isBuffer(f)) return fail("bad frame");
-        const raw = await sharp(Buffer.from(f)).resize(w, h, { fit: "fill" }).ensureAlpha().raw().toBuffer();
-        if (raw.length !== expected) return fail("frame size mismatch");
-        rawFrames.push(raw);
-      }
-      const strip = Buffer.concat(rawFrames);
-      const delayArr = Array.isArray(delays) && delays.length === frames.length
-        ? delays.map((d) => Math.max(20, Math.round(Number(d) || 66)))
-        : frames.map(() => 66);
-
-      const pipeline = sharp(strip, { raw: { width: w, height: h * frames.length, channels: 4, pageHeight: h } });
-      const out = isWebp
-        ? await pipeline.webp({ delay: delayArr, loop: 0, quality: 80, effort: 4 }).toBuffer()
-        : await pipeline.gif({ delay: delayArr, loop: 0 }).toBuffer();
-
-      writeVideoFile(out, isWebp ? "webp" : "gif", thumbnailDataUrl);
+      result = await assembleAnimation(payload);
+    } catch (e) {
+      result = { ok: false, reason: e && e.message, userMessage: "Couldn't render the animation." };
+    }
+    if (!result.ok) {
+      console.error("Studio animation export failed:", result.reason);
+      showErrorToast(result.userMessage);
+      if (win && !win.isDestroyed()) win.webContents.send("studio-export-error", result.userMessage);
+      return;
+    }
+    try {
+      writeVideoFile(result.buffer, result.ext, payload && payload.thumbnailDataUrl);
       if (win && !win.isDestroyed()) win.destroy();
     } catch (e) {
-      fail(e && e.message ? e.message : e);
+      console.error("Failed to save the animation:", e);
+      showErrorToast("Couldn't save the animation");
+      if (win && !win.isDestroyed()) win.webContents.send("studio-export-error", "Couldn't save the animation.");
     }
-  });
-
-  ipcMain.on("vstudio-cancel", (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (win && !win.isDestroyed()) win.destroy();
   });
 
   function currentSettingsPayload() {
@@ -2209,6 +2365,10 @@ app.on("before-quit", () => {
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  for (const f of dragTempFiles) {
+    try { fs.unlinkSync(f); } catch {}
+  }
+  dragTempFiles.clear();
 });
 
 app.on("window-all-closed", () => {});

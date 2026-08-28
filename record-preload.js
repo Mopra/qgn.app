@@ -12,6 +12,10 @@ contextBridge.exposeInMainWorld("qgnRecord", {
   saveRecording: (buffer, thumbnail, format) => ipcRenderer.send("save-recording", buffer, thumbnail, format),
   reportError: (message) => ipcRenderer.send("recording-error", message),
   cancel: () => ipcRenderer.send("cancel"),
+  // Motion-capture clock sync: align main's event timestamps to the video clock.
+  motionStarted: (startTime) => ipcRenderer.send("recording-started", startTime),
+  motionPaused: () => ipcRenderer.send("recording-paused"),
+  motionResumed: () => ipcRenderer.send("recording-resumed"),
   openMicDropdown: () => ipcRenderer.send("open-mic-dropdown"),
   onMicDeviceSelected: (callback) => {
     ipcRenderer.removeAllListeners("mic-device-selected");

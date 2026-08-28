@@ -17,11 +17,20 @@ document.getElementById("link-star").addEventListener("click", () => {
   window.updateAPI.star();
 });
 
+document.getElementById("link-notes").addEventListener("click", () => {
+  window.updateAPI.openNotes();
+});
+
 actionBtn.addEventListener("click", () => {
   if (!actionBtn.disabled) {
     window.updateAPI.installUpdate();
   }
 });
+
+// Name the version being installed so "What's new" has an obvious subject.
+function versionSuffix(data) {
+  return data && data.version ? " " + data.version : "";
+}
 
 window.updateAPI.onUpdateStatus((data) => {
   if (data.status === "downloading") {
@@ -29,13 +38,13 @@ window.updateAPI.onUpdateStatus((data) => {
     progressFill.style.width = pct + "%";
     progressLabel.textContent = pct + "% downloaded";
     titleEl.textContent = "Downloading update";
-    subtitleEl.textContent = "A new version of qgn is downloading";
+    subtitleEl.textContent = "QGN" + versionSuffix(data) + " is downloading";
     actionBtn.textContent = "Downloading...";
     actionBtn.disabled = true;
     progressArea.style.display = "";
   } else if (data.status === "ready") {
     titleEl.textContent = "Ready to update";
-    subtitleEl.textContent = "The new version has been downloaded";
+    subtitleEl.textContent = "QGN" + versionSuffix(data) + " is ready to install";
     progressFill.style.width = "100%";
     progressLabel.textContent = "Download complete";
     actionBtn.textContent = "Update & relaunch";

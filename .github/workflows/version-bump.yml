@@ -67,7 +67,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish release (undraft)
-        run: gh release edit ${{ env.NEW_VERSION }} --draft=false --latest
+      # The body users read on the release page, and what the in-app update
+      # card's "What's new" link points at. A missing CHANGELOG entry must not
+      # block the release, so the undraft happens either way.
+      - name: Publish release (undraft) with notes from CHANGELOG.md
+        run: |
+          $version = "${{ env.NEW_VERSION }}".TrimStart("v")
+          $notes = (node scripts/release-notes.js $version) -join "`n"
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($notes)) {
+            Write-Host "No CHANGELOG entry for $version; publishing without notes."
+            gh release edit ${{ env.NEW_VERSION }} --draft=false --latest
+          } else {
+            Set-Content -Path release-notes.txt -Value $notes -Encoding utf8
+            gh release edit ${{ env.NEW_VERSION }} --draft=false --latest --notes-file release-notes.txt
+          }
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
