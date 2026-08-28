@@ -1,7 +1,7 @@
 {
   "name": "qgn",
   "productName": "QGN",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "Instant screenshot capture and screen recording tool for Windows. Clipboard-first, floating previews, annotation, multi-monitor. Open source.",
   "license": "MIT",
   "homepage": "https://qgn.app",
