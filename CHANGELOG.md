@@ -3,7 +3,7 @@
 The top section is what ships in the next release. CI publishes it as the
 release notes on GitHub, and the in-app update card links straight to it.
 
-## 0.1.15
+## 0.1.16
 
 **Studio: one editor for screenshots and recordings**
 

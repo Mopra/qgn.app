@@ -24,6 +24,7 @@
   },
   "build": {
     "appId": "com.mopra.qgn",
+    "npmRebuild": false,
     "productName": "QGN",
     "directories": {
       "output": "dist"

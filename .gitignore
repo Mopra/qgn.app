@@ -5,3 +5,4 @@ out/
 .DS_Store
 docs/
 release-notes.txt
+dist-verify/
