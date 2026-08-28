@@ -34,8 +34,8 @@ QGN (Quick Gen) is a lightweight, open-source desktop screenshot tool for Window
 
 ### Capture
 - **Instant hotkey capture:** `Ctrl+Q` activates a fullscreen overlay with crosshair cursor
-- **Adjustable selection:** Releasing the mouse settles the rect rather than taking it. Drag the edges, corners or the middle, nudge with the arrow keys, then confirm with `Enter`, a double-click, or the button. (Switchable back to capture-on-release.)
-- **Snap to a window:** Click a window to capture exactly it; edges snap to nearby windows as you drag (hold `Alt` to ignore them)
+- **Instant by default:** Release the mouse and the capture is done. Hold `Alt` as you release to settle the selection for adjustment instead: drag the edges, corners or the middle, nudge with the arrow keys, then confirm with `Enter`, a double-click, or the button. A setting makes adjusting the default (where `Alt` then means capture instantly).
+- **Snap to a window:** Click a window to capture exactly it; edges snap to nearby windows as you drag (hold `Ctrl` to ignore them)
 - **Pixel loupe:** A magnifier follows the cursor with a live coordinate and colour readout
 - **Full-screen capture:** Press `Space` on the overlay (or use the tray menu) to grab the whole display, in both capture and record modes
 - **Real-time dimension display:** See pixel width and height as you drag, and `Shift` to constrain to a square

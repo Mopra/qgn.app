@@ -3,6 +3,25 @@
 The top section is what ships in the next release. CI publishes it as the
 release notes on GitHub, and the in-app update card links straight to it.
 
+## 0.1.18
+
+**Instant capture is the default again**
+
+0.1.17 made every capture stop for a confirm step. The adjustable selection is
+worth having; making every capture pay for it was a mistake, and it broke the
+thing this app is for: press the hotkey, drag, it's on your clipboard.
+
+- Releasing the mouse captures immediately again, exactly as before 0.1.17.
+- Hold <kbd>Alt</kbd> as you release and that one capture settles for
+  adjustment instead, with the full 0.1.17 kit: handles, arrow-key nudging,
+  <kbd>Enter</kbd> or double-click to confirm.
+- "Adjust selection before capture" in Settings still makes adjusting the
+  default, and there <kbd>Alt</kbd> flips the other way: hold it to capture
+  instantly.
+- Ignoring window-edge snapping moved from <kbd>Alt</kbd> to <kbd>Ctrl</kbd>,
+  so holding it can't accidentally arm the adjust step at release. A stray
+  <kbd>Ctrl</kbd> still held from the hotkey costs at most one drag's snapping.
+
 ## 0.1.17
 
 **Redaction can no longer be undone by stacking marks**

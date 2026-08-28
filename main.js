@@ -129,10 +129,12 @@ function getImageQuality() {
   return Number.isFinite(q) && q >= 1 && q <= 100 ? q : 90;
 }
 
-// Whether releasing the mouse settles the selection for adjustment (default)
-// or captures straight away, the way it did before the overlay grew handles.
+// Whether releasing the mouse settles the selection for adjustment, or
+// captures straight away. Instant is the default: "Ctrl+Q, drag, it's on the
+// clipboard" is the product, and holding Alt at release gives any one capture
+// the other behaviour, so adjustability costs nothing until it is wanted.
 function getConfirmSelection() {
-  return loadSettings().confirmSelection !== false; // default true
+  return loadSettings().confirmSelection === true; // default false (instant)
 }
 
 // Seconds before an unpinned preview auto-dismisses. 0 = never. Default 10.

@@ -254,7 +254,7 @@ async function run() {
     s.sel.w === 300 && s.sel.h === 200,
     JSON.stringify(s.sel));
 
-  // ── 10. The immediate-capture setting restores the old behaviour ──
+  // ── 10. Instant mode (the default): releasing captures straight away ──
   win.webContents.send("activate-capture", { displayId: "1", confirmSelection: false });
   await wait(200);
   ipcLog.length = 0;
@@ -264,6 +264,50 @@ async function run() {
   record("with confirmation off, releasing captures straight away",
     ipcLog.some((e) => e.channel === "capture-region") && s.phase === "idle",
     JSON.stringify({ phase: s.phase, ipc: ipcLog.map((e) => e.channel) }));
+
+  const instantHint = await evalIn(win, `$instr.textContent`);
+  record("instant mode advertises Alt-to-adjust in the instructions",
+    instantHint.includes("Alt to adjust"), instantHint);
+
+  // ── 10b. Alt at release flips the behaviour for that one capture ──
+  // Instant mode + Alt: the selection settles instead of being taken.
+  ipcLog.length = 0;
+  await drag(win, 200, 200, 330, 300, ["alt"]);
+  s = await state(win);
+  record("Alt at release settles the selection in instant mode",
+    s.phase === "adjusting" && !ipcLog.some((e) => e.channel === "capture-region"),
+    JSON.stringify({ phase: s.phase, ipc: ipcLog.map((e) => e.channel) }));
+  key(win, "Escape");
+  await wait(80);
+
+  // Adjust mode + Alt: the capture is taken immediately.
+  win.webContents.send("activate-capture", { displayId: "1", confirmSelection: true });
+  await wait(200);
+  ipcLog.length = 0;
+  await drag(win, 200, 200, 330, 300, ["alt"]);
+  await wait(100);
+  s = await state(win);
+  record("Alt at release captures immediately in adjust mode",
+    ipcLog.some((e) => e.channel === "capture-region") && s.phase === "idle",
+    JSON.stringify({ phase: s.phase, ipc: ipcLog.map((e) => e.channel) }));
+
+  // Snapping's bypass moved to Ctrl so it cannot collide with Alt's meaning.
+  // Same drag twice, ending 4px from a window corner: plain snaps to the
+  // window's 500,400 corner, Ctrl leaves the raw rect alone.
+  win.webContents.send("activate-capture", { displayId: "1", confirmSelection: false });
+  await wait(200);
+  ipcLog.length = 0;
+  await drag(win, 200, 200, 496, 396);
+  await wait(100);
+  const snapped2 = (ipcLog.find((e) => e.channel === "capture-region") || { args: [{}] }).args[0];
+  ipcLog.length = 0;
+  await drag(win, 200, 200, 496, 396, ["control"]);
+  await wait(100);
+  const unsnapped = (ipcLog.find((e) => e.channel === "capture-region") || { args: [{}] }).args[0];
+  record("a plain drag snaps to a window edge; Ctrl bypasses it",
+    snapped2.width === 300 && snapped2.height === 200 &&
+    unsnapped.width === 296 && unsnapped.height === 196,
+    JSON.stringify({ plain: [snapped2.width, snapped2.height], ctrl: [unsnapped.width, unsnapped.height] }));
 
   // ── 11. Video mode keeps its mode across a back-out ──
   win.webContents.send("overlay-reset-video", { confirmSelection: true });

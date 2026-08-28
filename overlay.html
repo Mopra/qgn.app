@@ -347,8 +347,9 @@
       // the overlay activates; the renderer just shows the selection UI and
       // reports the chosen region (in CSS pixels) back for cropping.
       window.qgn.onActivateCapture((data) => {
-        reset();
+        // Options first: reset() paints the instruction line, which reads them.
         applyOptions(data);
+        reset();
         loadWindowRects();
       });
 
@@ -368,8 +369,10 @@
       //      | "adjusting" (rect exists, handles live, waiting on confirm)
       let phase = "idle";
       let mode = "screenshot";
-      // When false the old behaviour returns: releasing the mouse captures.
-      let confirmSelection = true;
+      // false (default): releasing the mouse captures instantly; true: it
+      // settles the selection for adjustment. Alt at release flips whichever
+      // is active for that one capture.
+      let confirmSelection = false;
       let sel = { x: 0, y: 0, w: 0, h: 0 };
       let drag = null;
       let rafId = 0;
@@ -401,9 +404,12 @@
         hideAllSelection();
         $noSel.hidden = false;
         $instr.hidden = false;
-        $instr.textContent = mode === "video"
-          ? "Drag to select a recording area · Space for full screen · ESC to cancel"
-          : "Drag to select an area · Space for full screen · ESC to cancel";
+        // The Alt hint only reads correctly in instant mode; in adjust mode the
+        // handles explain themselves and Alt is the power-user inverse.
+        const verb = mode === "video" ? "Drag to select a recording area" : "Drag to select an area";
+        $instr.textContent = confirmSelection
+          ? verb + " · Space for full screen · ESC to cancel"
+          : verb + " · Space for full screen · Alt to adjust first · ESC to cancel";
       }
 
       function hideAllSelection() {
@@ -827,7 +833,10 @@
             drag.moved = true;
           }
           sel = rectFromPoints(drag.startX, drag.startY, e.clientX, e.clientY, e.shiftKey);
-          if (!e.altKey) sel = snapRect(sel);
+          // Ctrl, not Alt, bypasses snapping: Alt means "adjust after release",
+          // and a stray Ctrl (still held from the Ctrl+Q hotkey) only costs one
+          // drag's snapping, never a change in what release does.
+          if (!e.ctrlKey) sel = snapRect(sel);
           requestLoupe();
         } else if (drag.type === "move") {
           const dx = e.clientX - drag.startX;
@@ -835,7 +844,7 @@
           sel = clampMove({ x: drag.orig.x + dx, y: drag.orig.y + dy, w: drag.orig.w, h: drag.orig.h });
         } else {
           sel = resizeBy(drag.orig, drag.grip, e.clientX - drag.startX, e.clientY - drag.startY);
-          if (!e.altKey) sel = snapRect(sel);
+          if (!e.ctrlKey) sel = snapRect(sel);
         }
         scheduleRender();
       });
@@ -859,6 +868,11 @@
         drag = null;
         document.body.style.cursor = "crosshair";
 
+        // Alt at release flips the mode for this one capture: in instant mode
+        // it settles the rect for adjustment, in adjust mode it captures
+        // straight away. XOR is exactly that sentence.
+        const wantAdjust = confirmSelection !== e.altKey;
+
         if (wasNew && !moved) {
           // A click, not a drag: take the window under the cursor if we know of
           // one, otherwise treat it as a mis-click and stay put.
@@ -866,7 +880,7 @@
           if (win) {
             sel = clampRect(win);
             phase = "adjusting";
-            if (!confirmSelection) { confirmSelectionNow(); return; }
+            if (!wantAdjust) { confirmSelectionNow(); return; }
             scheduleRender();
             return;
           }
@@ -882,7 +896,7 @@
         sel = clampRect(sel);
         phase = "adjusting";
         hideLoupe();
-        if (!confirmSelection) { confirmSelectionNow(); return; }
+        if (!wantAdjust) { confirmSelectionNow(); return; }
         scheduleRender();
       });
 
@@ -999,8 +1013,8 @@
       // IPC-driven overlay commands (replaces executeJavaScript calls)
       window.qgn.onClear(() => clear());
       window.qgn.onResetForVideo((data) => {
-        resetForVideo();
         applyOptions(data);
+        resetForVideo();
         loadWindowRects();
       });
       window.qgn.onShowRecordingBorder((region) => showRecordingBorder(region));
