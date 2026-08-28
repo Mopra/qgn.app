@@ -3,9 +3,14 @@
 # Windows exposes no way for Electron to read other applications' window
 # bounds, which is what snap-to-window in the capture overlay needs. This runs
 # as one long-lived child process: it compiles the P/Invoke shim once at
-# startup, then answers a request per line on stdin with a single line of
-# "x,y,w,h;x,y,w,h;..." on stdout. Compilation is the slow part (~800ms) and it
-# happens once, so every request after the first costs a couple of milliseconds.
+# startup, then answers a request per line on stdin with a single line on
+# stdout. Compilation is the slow part (~800ms) and it happens once, so every
+# request after the first costs a couple of milliseconds.
+#
+# Each window is "x<US>y<US>w<US>h<US>title", records separated by <RS>
+# (U+001F and U+001E). Titles are arbitrary text from other applications, so
+# any printable delimiter would eventually collide with one; control characters
+# cannot survive in a title and are stripped below regardless.
 #
 # Coordinates are PHYSICAL pixels: the process opts into per-monitor DPI
 # awareness so a scaled display reports true pixels rather than virtualised
@@ -20,6 +25,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Titles are Unicode. Without this the console encoding mangles anything
+# outside the OEM codepage on its way to the parent.
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+
 Add-Type -TypeDefinition @"
 using System;
 using System.Text;
@@ -30,6 +39,7 @@ public class QgnWin {
   [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr h);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
   [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
@@ -96,7 +106,19 @@ public class QgnWin {
       int ht = r.Bottom - r.Top;
       if (w < 40 || ht < 40) return true;
 
-      sb.Append(r.Left).Append(',').Append(r.Top).Append(',').Append(w).Append(',').Append(ht).Append(';');
+      var title = new StringBuilder(256);
+      GetWindowText(h, title, title.Capacity);
+      // The protocol is line-based and delimiter-separated, so anything that
+      // could break a record is replaced rather than escaped.
+      string name = title.ToString();
+      var clean = new StringBuilder(name.Length);
+      foreach (char ch in name) clean.Append(char.IsControl(ch) ? ' ' : ch);
+
+      sb.Append(r.Left).Append('\u001f')
+        .Append(r.Top).Append('\u001f')
+        .Append(w).Append('\u001f')
+        .Append(ht).Append('\u001f')
+        .Append(clean.ToString().Trim()).Append('\u001e');
       return true;
     }, IntPtr.Zero);
     return sb.ToString();

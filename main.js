@@ -702,6 +702,14 @@ const SNAP_REQUEST_TIMEOUT_MS = 2000;
 // Compiling the helper's P/Invoke shim takes about a second on a cold start.
 // Past this it is not coming, and waiting on it would hang the caller forever.
 const SNAP_HELPER_START_TIMEOUT_MS = 8000;
+// The helper's wire format. Window titles are arbitrary text, so the delimiters
+// are control characters a title cannot contain (and which it strips anyway).
+const SNAP_FIELD_SEP = String.fromCharCode(0x1f);
+const SNAP_RECORD_SEP = String.fromCharCode(0x1e);
+// Start the helper shortly after launch rather than on the first capture: its
+// cold start is about a second, which is exactly the window in which the first
+// Ctrl+Q would otherwise find no windows to snap to and feel broken.
+const SNAP_PREWARM_DELAY_MS = 3000;
 
 function snapHelperScript() {
   // PowerShell is not Electron-aware, so it cannot read a path inside
@@ -849,10 +857,12 @@ async function getSnapWindowRects() {
   const vh = display.bounds.height;
 
   const out = [];
-  for (const part of line.split(";")) {
+  for (const part of line.split(SNAP_RECORD_SEP)) {
     if (!part) continue;
-    const n = part.split(",").map(Number);
-    if (n.length !== 4 || !n.every(Number.isFinite)) continue;
+    const f = part.split(SNAP_FIELD_SEP);
+    if (f.length < 4) continue;
+    const n = f.slice(0, 4).map(Number);
+    if (!n.every(Number.isFinite)) continue;
     const x = (n[0] - originX) / sf;
     const y = (n[1] - originY) / sf;
     const w = n[2] / sf;
@@ -861,11 +871,15 @@ async function getSnapWindowRects() {
     const x1 = Math.max(0, x), y1 = Math.max(0, y);
     const x2 = Math.min(vw, x + w), y2 = Math.min(vh, y + h);
     if (x2 - x1 < 20 || y2 - y1 < 20) continue;
+    // The title is another application's text, so it is length-capped here and
+    // only ever rendered through textContent on the overlay.
+    const title = (f[4] || "").slice(0, 80);
     out.push({
       x: Math.round(x1),
       y: Math.round(y1),
       w: Math.round(x2 - x1),
       h: Math.round(y2 - y1),
+      title,
     });
   }
   return out;
@@ -2130,6 +2144,13 @@ app.whenReady().then(() => {
   createOverlay();
   createTray();
   restorePinnedPreviews();
+
+  // Get the window-bounds helper compiled and waiting, so snap-to-window works
+  // on the very first Ctrl+Q instead of only from the second one onwards.
+  // Delayed so it never competes with the app's own startup.
+  if (process.platform === "win32") {
+    setTimeout(() => { startSnapHelper(); }, SNAP_PREWARM_DELAY_MS);
+  }
 
   // Keep previewDisplay up-to-date when monitors change
   screen.on("display-metrics-changed", () => {

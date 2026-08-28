@@ -70,6 +70,48 @@
         border-radius: 4px;
       }
 
+      /* Names the window under the cursor and says what clicking does, so
+         window capture is discoverable by hovering rather than by accident. */
+      .snap-label {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        max-width: min(420px, 90%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        padding: 8px 14px;
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.62);
+        backdrop-filter: blur(40px) saturate(1.6);
+        -webkit-backdrop-filter: blur(40px) saturate(1.6);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+        font-family: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+        color: rgba(255, 255, 255, 0.95);
+        text-align: center;
+      }
+
+      .snap-label .name {
+        font-size: 13px;
+        font-weight: 500;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .snap-label .act {
+        font-size: 11px;
+        opacity: 0.65;
+        white-space: nowrap;
+      }
+
+      /* display:flex would otherwise beat the UA's [hidden] { display:none }. */
+      .snap-label[hidden] { display: none; }
+
       /* Resize grips, only while the selection is being adjusted. */
       .handle {
         position: absolute;
@@ -213,20 +255,23 @@
         flex-shrink: 0;
       }
 
+      /* Anchored near the bottom rather than dead centre: it now stays up while
+         a window is hovered, and the centre belongs to that window's label. */
       .instructions {
         position: fixed;
-        top: 50%;
+        bottom: 48px;
         left: 50%;
-        transform: translate(-50%, -50%);
+        transform: translateX(-50%);
         color: rgba(255, 255, 255, 0.95);
         font-family: -apple-system, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 400;
         letter-spacing: 0.01em;
+        white-space: nowrap;
         background: rgba(0, 0, 0, 0.55);
         backdrop-filter: blur(60px) saturate(1.8);
         -webkit-backdrop-filter: blur(60px) saturate(1.8);
-        padding: 16px 28px;
+        padding: 11px 20px;
         border-radius: 20px;
         pointer-events: none;
         border: 1px solid rgba(255, 255, 255, 0.15);
@@ -278,7 +323,12 @@
       <div id="dim-left" class="dim dim-left" hidden></div>
       <div id="dim-right" class="dim dim-right" hidden></div>
       <div id="dim-bottom" class="dim dim-bottom" hidden></div>
-      <div id="snap" class="snap-hint" hidden></div>
+      <div id="snap" class="snap-hint" hidden>
+        <div class="snap-label" id="snapLabel">
+          <span class="name" id="snapName"></span>
+          <span class="act" id="snapAct">Click to capture this window</span>
+        </div>
+      </div>
       <div id="sel" class="selection" hidden>
         <div id="dims" class="dimensions"></div>
       </div>
@@ -318,6 +368,9 @@
       const $sel  = document.getElementById("sel");
       const $dims = document.getElementById("dims");
       const $snap = document.getElementById("snap");
+      const $snapLabel = document.getElementById("snapLabel");
+      const $snapName = document.getElementById("snapName");
+      const $snapAct = document.getElementById("snapAct");
       const $handles = document.getElementById("handles");
       const $bar = document.getElementById("bar");
       const $barSize = document.getElementById("barSize");
@@ -404,12 +457,12 @@
         hideAllSelection();
         $noSel.hidden = false;
         $instr.hidden = false;
-        // The Alt hint only reads correctly in instant mode; in adjust mode the
+        // Clicking a window is the least guessable of these, so it leads. The
+        // Alt hint only reads correctly in instant mode; in adjust mode the
         // handles explain themselves and Alt is the power-user inverse.
         const verb = mode === "video" ? "Drag to select a recording area" : "Drag to select an area";
-        $instr.textContent = confirmSelection
-          ? verb + " · Space for full screen · ESC to cancel"
-          : verb + " · Space for full screen · Alt to adjust first · ESC to cancel";
+        $instr.textContent = "Click a window · " + verb + " · Space for full screen" +
+          (confirmSelection ? "" : " · Alt to adjust first") + " · ESC to cancel";
       }
 
       function hideAllSelection() {
@@ -470,15 +523,15 @@
         return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
       }
 
-      // Smallest window under the cursor, so a control inside a window wins over
-      // the window behind it.
+      // The topmost window under the cursor. The list arrives in z-order (the
+      // helper's EnumWindows enumerates front to back), so the first hit is the
+      // one the user can actually see there. Picking the smallest instead would
+      // name a window that is hidden behind the one being pointed at.
       function windowAt(px, py) {
-        let best = null;
         for (const r of windowRects) {
-          if (!pointInRect(px, py, r)) continue;
-          if (!best || r.w * r.h < best.w * best.h) best = r;
+          if (pointInRect(px, py, r)) return r;
         }
-        return best;
+        return null;
       }
 
       // Pull an edge onto a nearby window edge. Returns the adjusted value.
@@ -548,19 +601,32 @@
           $handles.hidden = true;
           $bar.classList.remove("show");
           $dimT.hidden = $dimL.hidden = $dimR.hidden = $dimB.hidden = true;
-          // A detected window under the cursor previews as a dashed rect.
+          // A detected window under the cursor previews as a dashed rect, named
+          // so it is obvious both what would be captured and that clicking is
+          // what captures it.
           if (hoverRect) {
             const hs = $snap.style;
             hs.left = hoverRect.x + "px";
             hs.top = hoverRect.y + "px";
             hs.width = hoverRect.w + "px";
             hs.height = hoverRect.h + "px";
+            // textContent, never innerHTML: the title comes from another app.
+            $snapName.textContent = hoverRect.title || "This window";
+            $snapAct.textContent =
+              (mode === "video" ? "Click to record this window" : "Click to capture this window") +
+              "  ·  " + hoverRect.w + " × " + hoverRect.h;
+            // A label bigger than the window it names looks broken, so it is
+            // only drawn when there is comfortably room for it.
+            $snapLabel.hidden = hoverRect.w < 200 || hoverRect.h < 90;
             $snap.hidden = false;
           } else {
             $snap.hidden = true;
           }
           $noSel.hidden = false;
-          $instr.hidden = !!hoverRect;
+          // The instruction line stays up while hovering. It used to hide, and
+          // since windows cover most of the screen it vanished the moment the
+          // mouse moved, taking the Space/Alt/ESC hints with it.
+          $instr.hidden = false;
           return;
         }
 

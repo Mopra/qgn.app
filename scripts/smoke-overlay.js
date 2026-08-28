@@ -30,10 +30,11 @@ for (const ch of ["capture-region", "start-video-recording", "cancel", "close-mi
 }
 
 // A fixed 4-window layout, so snapping has something deterministic to hit.
+// In z-order, front to back, the way the helper enumerates them.
 const WINDOW_RECTS = [
-  { x: 100, y: 100, w: 400, h: 300 },
-  { x: 600, y: 150, w: 300, h: 200 },
-  { x: 120, y: 120, w: 100, h: 80 }, // nested inside the first
+  { x: 120, y: 120, w: 100, h: 80, title: "Tiny" }, // on top of, and inside, Editor
+  { x: 100, y: 100, w: 400, h: 300, title: "Editor" },
+  { x: 600, y: 150, w: 300, h: 200, title: "Browser <img src=x onerror=alert(1)>" },
 ];
 let magnifyCalls = 0;
 ipcMain.handle("overlay-window-rects", () => WINDOW_RECTS);
@@ -233,13 +234,51 @@ async function run() {
     JSON.stringify(snapped.far));
 
   const hit = await evalIn(win, `(() => ({
-    nested: windowAt(150, 150),
+    stacked: windowAt(150, 150),
     outer: windowAt(450, 350),
     none: windowAt(950, 650),
   }))()`);
-  record("the smallest window under the cursor wins",
-    hit.nested && hit.nested.w === 100 && hit.outer && hit.outer.w === 400 && hit.none === null,
+  record("the topmost window under the cursor wins, not the smallest",
+    hit.stacked && hit.stacked.title === "Tiny" &&
+    hit.outer && hit.outer.title === "Editor" && hit.none === null,
     JSON.stringify(hit));
+
+  // ── 8b. Hovering a window names it and says what a click would do ──
+  win.webContents.send("activate-capture", { displayId: "1", confirmSelection: false });
+  await wait(250);
+  mouse(win, "mouseMove", 650, 200);
+  await wait(120);
+  const hover = await evalIn(win, `({
+    shown: !document.getElementById("snap").hidden,
+    labelShown: !document.getElementById("snapLabel").hidden,
+    name: document.getElementById("snapName").textContent,
+    act: document.getElementById("snapAct").textContent,
+    // The title is another app's text: it must land as text, never as markup.
+    injected: !!document.querySelector("#snapName img"),
+    instrShown: !document.getElementById("instr").hidden,
+    instr: document.getElementById("instr").textContent,
+  })`);
+  const browser = WINDOW_RECTS.find((r) => r.title.startsWith("Browser"));
+  record("hovering a window outlines and names it",
+    hover.shown && hover.labelShown && hover.name === browser.title,
+    JSON.stringify(hover));
+  record("a window title is rendered as text, never as markup",
+    hover.injected === false, JSON.stringify({ injected: hover.injected, name: hover.name }));
+  record("the hover label says clicking captures, with the size",
+    hover.act.includes("Click to capture this window") && hover.act.includes("300 × 200"),
+    hover.act);
+  record("the instruction line survives hovering a window",
+    hover.instrShown && hover.instr.includes("Click a window"), JSON.stringify(hover.instr));
+
+  // A window too small to hold the label keeps the outline but drops the text.
+  mouse(win, "mouseMove", 150, 150);
+  await wait(120);
+  const tiny = await evalIn(win, `({
+    shown: !document.getElementById("snap").hidden,
+    labelShown: !document.getElementById("snapLabel").hidden,
+  })`);
+  record("a window too small for the label still gets an outline",
+    tiny.shown && !tiny.labelShown, JSON.stringify(tiny));
 
   // ── 9. Clicking (not dragging) takes the window under the cursor ──
   win.webContents.send("activate-capture", { displayId: "1", confirmSelection: true });

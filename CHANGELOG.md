@@ -3,6 +3,27 @@
 The top section is what ships in the next release. CI publishes it as the
 release notes on GitHub, and the in-app update card links straight to it.
 
+## 0.1.19
+
+**You can capture a whole window by clicking it, and now the overlay says so**
+
+Clicking a window to capture exactly that window has been there since 0.1.17,
+but nothing ever told you, and it quietly did not work on the first capture
+after launch. Both fixed:
+
+- Hovering a window outlines it and names it, with its size and "Click to
+  capture this window" on the label. Small windows keep the outline without the
+  text.
+- The window list is now prepared shortly after launch instead of on the first
+  capture, so the very first <kbd>Ctrl+Q</kbd> can snap to a window like every
+  one after it.
+- "Click a window" leads the instruction line, which no longer disappears the
+  moment you hover something. On a screen full of windows it used to vanish
+  instantly and take the Space, Alt and ESC hints with it. It has also moved off
+  the centre of the screen, out of the way of what you are aiming at.
+- Hovering overlapping windows now names the one actually in front, rather than
+  the smallest one under the cursor (which could be hidden behind it).
+
 ## 0.1.18
 
 **Instant capture is the default again**
