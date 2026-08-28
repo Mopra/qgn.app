@@ -147,10 +147,12 @@ const electronStub = {
     handle(channel, cb) { calls.ipcHandle.set(channel, cb); },
   },
   Tray: class {
-    constructor(icon) { this.icon = icon; calls.trays.push(this); }
+    constructor(icon) { this.icon = icon; this.destroyed = false; calls.trays.push(this); }
     setToolTip(t) { this.tooltip = t; }
     setContextMenu(m) { calls.trayMenus.push(m); }
     getBounds() { return { x: 1800, y: 1040, width: 24, height: 24 }; }
+    isDestroyed() { return this.destroyed; }
+    destroy() { this.destroyed = true; }
   },
   Menu: { buildFromTemplate: (tpl) => tpl },
   dialog: { showOpenDialog: () => Promise.resolve({ canceled: true, filePaths: [] }) },
@@ -219,7 +221,8 @@ test("every channel the preloads talk to has a handler", () => {
     "studio-export-encoded", "studio-export-frames",
     "set-copy-format", "set-save-to-disk", "set-start-on-startup", "set-hotkey",
     "reset-hotkeys", "set-image-quality", "set-dismiss-seconds",
-    "set-record-countdown", "open-save-folder", "choose-save-folder", "settings-resize",
+    "set-record-countdown", "set-confirm-selection", "set-keep-history",
+    "open-save-folder", "choose-save-folder", "settings-resize",
     "welcome-close", "welcome-open-settings", "update-install", "update-dismiss",
     "star-open", "star-dismiss", "update-notes",
   ];
@@ -227,7 +230,8 @@ test("every channel the preloads talk to has a handler", () => {
   assert.deepStrictEqual(missing, [], "unhandled channels: " + missing.join(", "));
 
   const expectedHandle = ["get-settings", "get-welcome-hotkeys", "get-selected-mic-id",
-    "preview-get-bounds", "studio-get-colors", "studio-get-gradients"];
+    "preview-get-bounds", "studio-get-colors", "studio-get-gradients",
+    "overlay-magnify", "overlay-window-rects"];
   const missingH = expectedHandle.filter((c) => !calls.ipcHandle.has(c));
   assert.deepStrictEqual(missingH, [], "unhandled invoke channels: " + missingH.join(", "));
 });
@@ -345,10 +349,91 @@ test("the What's new link opens a release page, never an attacker-shaped URL", (
 
 test("the tray menu offers every entry point", () => {
   const labels = calls.trayMenus[calls.trayMenus.length - 1].map((i) => i.label).filter(Boolean);
-  for (const expected of ["Capture full screen", "Open Studio", "Annotate clipboard image",
-                          "Open clipboard image in Studio", "Open video in Studio...", "Settings...", "Quit"]) {
+  for (const expected of ["Capture full screen", "Recent captures", "Open Studio",
+                          "Annotate clipboard image", "Open clipboard image in Studio",
+                          "Open video in Studio...", "Settings...", "Quit"]) {
     assert.ok(labels.some((l) => l === expected), `tray menu is missing "${expected}" (has: ${labels.join(" | ")})`);
   }
+});
+
+test("an empty capture history says so rather than showing a blank submenu", () => {
+  const menu = calls.trayMenus[calls.trayMenus.length - 1];
+  const recent = menu.find((i) => i.label === "Recent captures");
+  assert.ok(recent && Array.isArray(recent.submenu), "no Recent captures submenu");
+  assert.deepStrictEqual(recent.submenu.map((i) => i.label), ["No recent captures"]);
+  assert.strictEqual(recent.submenu[0].enabled, false);
+});
+
+test("a capture is written into the history ring", async () => {
+  const manifestPath = path.join(userDataDir, "userData", "history.json");
+  fire("set-keep-history", true);
+  // PNG needs no re-encode, which keeps sharp (and its "unsupported format"
+  // complaint about the stub image) out of this test's output.
+  fire("set-copy-format", "png");
+  try { fs.unlinkSync(manifestPath); } catch {}
+
+  // studio-save runs a finished image through handleCaptureData, the same
+  // funnel every capture goes through. (capture-region can't be used here: it
+  // needs a pendingScreenshot that only a live overlay produces.)
+  fire("studio-save", Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  // handleCaptureData is async and the handler does not await it.
+  await new Promise((r) => setTimeout(r, 50));
+
+  const list = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  assert.ok(Array.isArray(list) && list.length === 1, "capture was not recorded: " + JSON.stringify(list));
+  assert.ok(fs.existsSync(list[0].imagePath), "history entry has no image on disk");
+  assert.ok(typeof list[0].ts === "number" && list[0].ts > 0, "history entry has no timestamp");
+
+  // And it is offered in the tray, with a clear action beside it.
+  const recent = calls.trayMenus[calls.trayMenus.length - 1].find((i) => i.label === "Recent captures");
+  assert.ok(recent.submenu.some((i) => typeof i.click === "function" && i.label !== "Clear recent captures"),
+    "the recorded capture is not in the tray menu");
+});
+
+test("capture history keeps the newest entries and prunes the rest", () => {
+  const historyDir = path.join(userDataDir, "userData", "history");
+  const manifestPath = path.join(userDataDir, "userData", "history.json");
+  // A 1x1 PNG is enough: only the file's existence and size are consulted.
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64"
+  );
+  fs.mkdirSync(historyDir, { recursive: true });
+
+  const written = [];
+  for (let i = 0; i < 15; i++) {
+    const p = path.join(historyDir, `h${i}.png`);
+    fs.writeFileSync(p, png);
+    written.push({ imagePath: p, filePath: null, imgSize: { width: 1, height: 1 }, isVideo: false, ts: Date.now() - i * 1000 });
+  }
+  // One entry whose image is already gone: it cannot be restored, so it goes.
+  written.splice(2, 0, { imagePath: path.join(historyDir, "missing.png"), imgSize: null, ts: Date.now() });
+  fs.writeFileSync(manifestPath, JSON.stringify(written));
+
+  fire("set-keep-history", true);
+  const kept = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  assert.ok(kept.length <= 12, `kept ${kept.length} entries, expected at most 12`);
+  assert.ok(!kept.some((k) => k.imagePath.endsWith("missing.png")), "kept an entry with no image");
+  // Order is newest-first, and the files past the cap are deleted, not orphaned.
+  assert.strictEqual(kept[0].imagePath, written[0].imagePath);
+  for (const gone of written.slice(13)) {
+    if (gone.imagePath.endsWith("missing.png")) continue;
+    assert.ok(!fs.existsSync(gone.imagePath), "pruned entry left its file behind: " + gone.imagePath);
+  }
+
+  const menu = calls.trayMenus[calls.trayMenus.length - 1];
+  const recent = menu.find((i) => i.label === "Recent captures");
+  assert.ok(recent.submenu.some((i) => i.label === "Clear recent captures"), "no clear action");
+  assert.ok(recent.submenu.filter((i) => typeof i.click === "function").length > 1, "no restorable entries");
+});
+
+test("turning capture history off forgets what was already stored", () => {
+  const manifestPath = path.join(userDataDir, "userData", "history.json");
+  fire("set-keep-history", false);
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(manifestPath, "utf8")), []);
+  const menu = calls.trayMenus[calls.trayMenus.length - 1];
+  const recent = menu.find((i) => i.label === "Recent captures");
+  assert.deepStrictEqual(recent.submenu.map((i) => i.label), ["No recent captures"]);
 });
 
 /* ───────────────────────── Runner ───────────────────────── */

@@ -61,6 +61,27 @@
           inset 0 0 20px rgba(255, 255, 255, 0.03);
       }
 
+      /* The rect a detected window would snap to, shown before it is taken. */
+      .snap-hint {
+        position: absolute;
+        border: 2px dashed rgba(255, 255, 255, 0.65);
+        background: rgba(255, 255, 255, 0.06);
+        pointer-events: none;
+        border-radius: 4px;
+      }
+
+      /* Resize grips, only while the selection is being adjusted. */
+      .handle {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        margin: -5px 0 0 -5px;
+        background: #fff;
+        border-radius: 2px;
+        pointer-events: none;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+      }
+
       .dimensions {
         position: absolute;
         bottom: -32px;
@@ -81,6 +102,115 @@
         box-shadow:
           0 2px 12px rgba(0, 0, 0, 0.2),
           inset 0 0.5px 0 rgba(255, 255, 255, 0.3);
+      }
+
+      /* Confirm bar: the selection is not taken until this says so. */
+      .bar {
+        position: absolute;
+        display: none;
+        align-items: center;
+        gap: 8px;
+        background: rgba(28, 28, 30, 0.82);
+        backdrop-filter: blur(50px) saturate(1.8);
+        -webkit-backdrop-filter: blur(50px) saturate(1.8);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 14px;
+        padding: 6px 8px 6px 12px;
+        font-family: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+        color: rgba(255, 255, 255, 0.95);
+        font-size: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+        white-space: nowrap;
+        z-index: 3;
+      }
+
+      .bar.show {
+        display: flex;
+      }
+
+      .bar .size {
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.03em;
+        opacity: 0.75;
+      }
+
+      .bar button {
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        border-radius: 9px;
+        padding: 5px 12px;
+        cursor: pointer;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.9);
+        transition: background 0.15s ease, border-color 0.15s ease;
+      }
+
+      .bar button:hover {
+        background: rgba(255, 255, 255, 0.18);
+        border-color: rgba(255, 255, 255, 0.35);
+      }
+
+      .bar button.primary {
+        background: #af226b;
+        border-color: rgba(255, 255, 255, 0.25);
+        color: #fff;
+      }
+
+      .bar button.primary:hover {
+        background: #c22a79;
+      }
+
+      .bar .hint {
+        opacity: 0.45;
+        font-size: 11px;
+        padding-left: 2px;
+      }
+
+      /* Pixel loupe. Sits near the cursor while aiming, never under it. */
+      .loupe {
+        position: absolute;
+        display: none;
+        width: 132px;
+        pointer-events: none;
+        z-index: 4;
+        border-radius: 12px;
+        overflow: hidden;
+        background: rgba(28, 28, 30, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+      }
+
+      .loupe.show {
+        display: block;
+      }
+
+      .loupe canvas {
+        display: block;
+        width: 130px;
+        height: 130px;
+      }
+
+      .loupe .read {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        font-family: -apple-system, "SF Mono", "Segoe UI", ui-monospace, monospace;
+        font-size: 10px;
+        letter-spacing: 0.02em;
+        color: rgba(255, 255, 255, 0.9);
+        font-variant-numeric: tabular-nums;
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+      }
+
+      .loupe .chip {
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        flex-shrink: 0;
       }
 
       .instructions {
@@ -148,8 +278,32 @@
       <div id="dim-left" class="dim dim-left" hidden></div>
       <div id="dim-right" class="dim dim-right" hidden></div>
       <div id="dim-bottom" class="dim dim-bottom" hidden></div>
+      <div id="snap" class="snap-hint" hidden></div>
       <div id="sel" class="selection" hidden>
         <div id="dims" class="dimensions"></div>
+      </div>
+      <div id="handles" hidden>
+        <div class="handle" data-h="nw"></div>
+        <div class="handle" data-h="n"></div>
+        <div class="handle" data-h="ne"></div>
+        <div class="handle" data-h="e"></div>
+        <div class="handle" data-h="se"></div>
+        <div class="handle" data-h="s"></div>
+        <div class="handle" data-h="sw"></div>
+        <div class="handle" data-h="w"></div>
+      </div>
+      <div id="bar" class="bar">
+        <span class="size" id="barSize">0 × 0</span>
+        <button type="button" class="primary" id="btnConfirm">Capture</button>
+        <button type="button" id="btnCancel">Cancel</button>
+        <span class="hint">Enter</span>
+      </div>
+      <div id="loupe" class="loupe">
+        <canvas id="loupeCanvas" width="260" height="260"></canvas>
+        <div class="read">
+          <span class="chip" id="loupeChip"></span>
+          <span id="loupeText">0, 0</span>
+        </div>
       </div>
       <div id="no-sel" class="no-selection" hidden></div>
       <div id="instr" class="instructions" hidden></div>
@@ -163,15 +317,39 @@
       const $dimB = document.getElementById("dim-bottom");
       const $sel  = document.getElementById("sel");
       const $dims = document.getElementById("dims");
+      const $snap = document.getElementById("snap");
+      const $handles = document.getElementById("handles");
+      const $bar = document.getElementById("bar");
+      const $barSize = document.getElementById("barSize");
+      const $btnConfirm = document.getElementById("btnConfirm");
+      const $btnCancel = document.getElementById("btnCancel");
+      const $loupe = document.getElementById("loupe");
+      const $loupeCanvas = document.getElementById("loupeCanvas");
+      const $loupeChip = document.getElementById("loupeChip");
+      const $loupeText = document.getElementById("loupeText");
       const $noSel = document.getElementById("no-sel");
       const $instr = document.getElementById("instr");
       const $rec   = document.getElementById("rec-border");
 
+      const HANDLE_ELS = Array.from($handles.querySelectorAll(".handle"));
+      const loupeCtx = $loupeCanvas.getContext("2d");
+
+      // --- Tunables ---
+      const MIN_DRAG = 5;          // px below which a drag counts as a click
+      const HANDLE_HIT = 12;       // px grab radius around a handle
+      const SNAP_DISTANCE = 12;    // px within which an edge sticks to a window edge
+      const LOUPE_DEVICE_RADIUS = 10; // device pixels shown either side of the cursor
+      const LOUPE_OFFSET = 22;     // gap between cursor and loupe
+      const NUDGE_SMALL = 1;
+      const NUDGE_LARGE = 10;
+
       // The main process captures a cursor-free frame of the display the moment
       // the overlay activates; the renderer just shows the selection UI and
       // reports the chosen region (in CSS pixels) back for cropping.
-      window.qgn.onActivateCapture(() => {
+      window.qgn.onActivateCapture((data) => {
         reset();
+        applyOptions(data);
+        loadWindowRects();
       });
 
       function sendCapture(region) {
@@ -186,51 +364,206 @@
       }
 
       // --- Selection state ---
-      let isSelecting = false;
-      let startX = 0;
-      let startY = 0;
-      let endX = 0;
-      let endY = 0;
+      // phase: "idle" (nothing picked) | "drawing" (dragging out a new rect)
+      //      | "adjusting" (rect exists, handles live, waiting on confirm)
+      let phase = "idle";
       let mode = "screenshot";
+      // When false the old behaviour returns: releasing the mouse captures.
+      let confirmSelection = true;
+      let sel = { x: 0, y: 0, w: 0, h: 0 };
+      let drag = null;
       let rafId = 0;
+      let cursorX = 0, cursorY = 0;
+
+      // Window rectangles for snapping, in CSS pixels relative to this display.
+      // Empty whenever the platform can't supply them, which turns every snap
+      // path into a no-op rather than a broken feature.
+      let windowRects = [];
+      let hoverRect = null;
+
+      function applyOptions(data) {
+        if (data && typeof data.confirmSelection === "boolean") {
+          confirmSelection = data.confirmSelection;
+        }
+      }
+
+      async function loadWindowRects() {
+        windowRects = [];
+        try {
+          const rects = await window.qgn.getWindowRects();
+          if (Array.isArray(rects)) windowRects = rects;
+        } catch (e) {
+          windowRects = [];
+        }
+      }
 
       function showInitial() {
-        // Show the "click and drag" prompt
         hideAllSelection();
         $noSel.hidden = false;
         $instr.hidden = false;
         $instr.textContent = mode === "video"
-          ? "Click and drag to select recording area. Press ESC to cancel."
-          : "Click and drag to select area · Space for full screen · ESC to cancel";
+          ? "Drag to select a recording area · Space for full screen · ESC to cancel"
+          : "Drag to select an area · Space for full screen · ESC to cancel";
       }
 
       function hideAllSelection() {
         $dimT.hidden = $dimL.hidden = $dimR.hidden = $dimB.hidden = true;
         $sel.hidden = true;
+        $snap.hidden = true;
+        $handles.hidden = true;
+        $bar.classList.remove("show");
         $noSel.hidden = true;
         $instr.hidden = true;
         $rec.hidden = true;
+        hideLoupe();
       }
 
+      /* ── Geometry ── */
+      function clampRect(r) {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const out = {
+          x: Math.round(Math.max(0, Math.min(r.x, vw - 1))),
+          y: Math.round(Math.max(0, Math.min(r.y, vh - 1))),
+          w: Math.round(r.w),
+          h: Math.round(r.h),
+        };
+        out.w = Math.max(1, Math.min(out.w, vw - out.x));
+        out.h = Math.max(1, Math.min(out.h, vh - out.y));
+        return out;
+      }
+
+      // Moving keeps the size: sliding a selection into an edge should stop it,
+      // not shrink it.
+      function clampMove(r) {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const w = Math.min(Math.round(r.w), vw);
+        const h = Math.min(Math.round(r.h), vh);
+        return {
+          x: Math.round(Math.max(0, Math.min(r.x, vw - w))),
+          y: Math.round(Math.max(0, Math.min(r.y, vh - h))),
+          w, h,
+        };
+      }
+
+      function rectFromPoints(ax, ay, bx, by, square) {
+        let w = bx - ax, h = by - ay;
+        if (square) {
+          const s = Math.max(Math.abs(w), Math.abs(h));
+          w = Math.sign(w || 1) * s;
+          h = Math.sign(h || 1) * s;
+        }
+        return {
+          x: Math.min(ax, ax + w),
+          y: Math.min(ay, ay + h),
+          w: Math.abs(w),
+          h: Math.abs(h),
+        };
+      }
+
+      function pointInRect(px, py, r) {
+        return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+      }
+
+      // Smallest window under the cursor, so a control inside a window wins over
+      // the window behind it.
+      function windowAt(px, py) {
+        let best = null;
+        for (const r of windowRects) {
+          if (!pointInRect(px, py, r)) continue;
+          if (!best || r.w * r.h < best.w * best.h) best = r;
+        }
+        return best;
+      }
+
+      // Pull an edge onto a nearby window edge. Returns the adjusted value.
+      function snapEdge(value, edges) {
+        let best = value, dist = SNAP_DISTANCE;
+        for (const e of edges) {
+          const d = Math.abs(e - value);
+          if (d < dist) { dist = d; best = e; }
+        }
+        return best;
+      }
+
+      function snapRect(r) {
+        if (!windowRects.length) return r;
+        const xs = [], ys = [];
+        for (const win of windowRects) {
+          xs.push(win.x, win.x + win.w);
+          ys.push(win.y, win.y + win.h);
+        }
+        const x1 = snapEdge(r.x, xs);
+        const y1 = snapEdge(r.y, ys);
+        const x2 = snapEdge(r.x + r.w, xs);
+        const y2 = snapEdge(r.y + r.h, ys);
+        return { x: x1, y: y1, w: Math.max(1, x2 - x1), h: Math.max(1, y2 - y1) };
+      }
+
+      /* ── Hit testing ── */
+      // Which grip (if any) the cursor is over. Only meaningful while adjusting.
+      function handleAt(px, py) {
+        if (phase !== "adjusting") return null;
+        const { x, y, w, h } = sel;
+        const mx = x + w / 2, my = y + h / 2;
+        const pts = {
+          nw: [x, y], n: [mx, y], ne: [x + w, y], e: [x + w, my],
+          se: [x + w, y + h], s: [mx, y + h], sw: [x, y + h], w: [x, my],
+        };
+        for (const k in pts) {
+          if (Math.abs(px - pts[k][0]) <= HANDLE_HIT && Math.abs(py - pts[k][1]) <= HANDLE_HIT) return k;
+        }
+        return null;
+      }
+
+      const CURSOR_FOR = {
+        nw: "nwse-resize", se: "nwse-resize",
+        ne: "nesw-resize", sw: "nesw-resize",
+        n: "ns-resize", s: "ns-resize",
+        e: "ew-resize", w: "ew-resize",
+      };
+
+      function updateCursor(px, py) {
+        if (drag) return;
+        const h = handleAt(px, py);
+        if (h) { document.body.style.cursor = CURSOR_FOR[h]; return; }
+        if (phase === "adjusting" && pointInRect(px, py, sel)) {
+          document.body.style.cursor = "move";
+          return;
+        }
+        document.body.style.cursor = "crosshair";
+      }
+
+      /* ── Rendering ── */
       function renderFrame() {
         rafId = 0;
-        const x = Math.min(startX, endX);
-        const y = Math.min(startY, endY);
-        const w = Math.abs(endX - startX);
-        const h = Math.abs(endY - startY);
 
-        if (w < 2 && h < 2) {
+        if (phase === "idle") {
           $sel.hidden = true;
+          $handles.hidden = true;
+          $bar.classList.remove("show");
           $dimT.hidden = $dimL.hidden = $dimR.hidden = $dimB.hidden = true;
+          // A detected window under the cursor previews as a dashed rect.
+          if (hoverRect) {
+            const hs = $snap.style;
+            hs.left = hoverRect.x + "px";
+            hs.top = hoverRect.y + "px";
+            hs.width = hoverRect.w + "px";
+            hs.height = hoverRect.h + "px";
+            $snap.hidden = false;
+          } else {
+            $snap.hidden = true;
+          }
           $noSel.hidden = false;
-          $instr.hidden = true;
+          $instr.hidden = !!hoverRect;
           return;
         }
 
+        $snap.hidden = true;
         $noSel.hidden = true;
         $instr.hidden = true;
 
-        // Update dim regions via style properties (no layout thrash — reads batched before writes)
+        const { x, y, w, h } = sel;
+
         const s = $dimT.style;
         s.height = y + "px";
         $dimT.hidden = false;
@@ -258,78 +591,389 @@
         ss.height = h + "px";
         $sel.hidden = false;
 
-        $dims.textContent = Math.round(w) + " × " + Math.round(h);
+        const label = Math.round(w) + " × " + Math.round(h);
+        $dims.textContent = label;
+
+        if (phase === "adjusting") {
+          $dims.style.visibility = "hidden";
+          positionHandles();
+          $handles.hidden = false;
+          $barSize.textContent = label;
+          // Show first: a display:none bar measures zero, and the bar has to be
+          // measured to be placed.
+          $bar.classList.add("show");
+          positionBar();
+        } else {
+          $dims.style.visibility = "";
+          $handles.hidden = true;
+          $bar.classList.remove("show");
+        }
+      }
+
+      function positionHandles() {
+        const { x, y, w, h } = sel;
+        const mx = x + w / 2, my = y + h / 2;
+        const at = {
+          nw: [x, y], n: [mx, y], ne: [x + w, y], e: [x + w, my],
+          se: [x + w, y + h], s: [mx, y + h], sw: [x, y + h], w: [x, my],
+        };
+        for (const el of HANDLE_ELS) {
+          const p = at[el.dataset.h];
+          el.style.left = p[0] + "px";
+          el.style.top = p[1] + "px";
+        }
+      }
+
+      // Below the selection by default, above it when there is no room, and
+      // tucked inside when the selection reaches both edges.
+      function positionBar() {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const bw = $bar.offsetWidth || 240;
+        const bh = $bar.offsetHeight || 36;
+        let bx = sel.x + sel.w - bw;
+        let by = sel.y + sel.h + 10;
+        if (by + bh > vh - 4) by = sel.y - bh - 10;
+        if (by < 4) by = Math.min(vh - bh - 4, sel.y + sel.h - bh - 8);
+        bx = Math.max(4, Math.min(bx, vw - bw - 4));
+        $bar.style.left = Math.round(bx) + "px";
+        $bar.style.top = Math.round(by) + "px";
       }
 
       function scheduleRender() {
         if (!rafId) rafId = requestAnimationFrame(renderFrame);
       }
 
+      /* ── Pixel loupe ──
+         Main owns the captured frame, so the loupe asks it for a small crop
+         around the cursor rather than shipping the whole screen to the renderer.
+         One request is in flight at a time; the cursor position is re-read when
+         it lands, so a slow reply never queues up a backlog. */
+      let loupeBusy = false;
+      let loupeWanted = false;
+
+      function loupeActive() {
+        return (phase === "idle" || phase === "drawing") && $rec.hidden;
+      }
+
+      function requestLoupe() {
+        if (!loupeActive()) { hideLoupe(); return; }
+        if (loupeBusy) { loupeWanted = true; return; }
+        loupeBusy = true;
+        const px = cursorX, py = cursorY;
+        window.qgn.magnify({
+          x: px,
+          y: py,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+          radius: LOUPE_DEVICE_RADIUS,
+        }).then((res) => {
+          loupeBusy = false;
+          if (res) drawLoupe(res, px, py);
+          if (loupeWanted) { loupeWanted = false; requestLoupe(); }
+        }).catch(() => {
+          loupeBusy = false;
+          hideLoupe();
+        });
+      }
+
+      const loupeImg = new Image();
+      let loupePending = null;
+
+      loupeImg.onload = () => {
+        if (!loupePending) return;
+        const { res, px, py } = loupePending;
+        loupePending = null;
+        paintLoupe(loupeImg, res, px, py);
+      };
+
+      function drawLoupe(res, px, py) {
+        if (!loupeActive()) { hideLoupe(); return; }
+        loupePending = { res, px, py };
+        loupeImg.src = res.dataUrl;
+      }
+
+      function paintLoupe(img, res, px, py) {
+        const size = $loupeCanvas.width;
+        const zoom = size / Math.max(1, res.w);
+        loupeCtx.imageSmoothingEnabled = false;
+        loupeCtx.clearRect(0, 0, size, size);
+        loupeCtx.drawImage(img, 0, 0, res.w, res.h, 0, 0, res.w * zoom, res.h * zoom);
+
+        // Pixel grid, only once a pixel is big enough for the lines to help.
+        if (zoom >= 6) {
+          loupeCtx.strokeStyle = "rgba(0,0,0,0.16)";
+          loupeCtx.lineWidth = 1;
+          loupeCtx.beginPath();
+          for (let i = 1; i < res.w; i++) {
+            const p = Math.round(i * zoom) + 0.5;
+            loupeCtx.moveTo(p, 0); loupeCtx.lineTo(p, size);
+          }
+          for (let i = 1; i < res.h; i++) {
+            const p = Math.round(i * zoom) + 0.5;
+            loupeCtx.moveTo(0, p); loupeCtx.lineTo(size, p);
+          }
+          loupeCtx.stroke();
+        }
+
+        // The exact pixel under the cursor.
+        loupeCtx.strokeStyle = "rgba(255,255,255,0.95)";
+        loupeCtx.lineWidth = 2;
+        loupeCtx.strokeRect(
+          Math.round(res.cx * zoom) - 1,
+          Math.round(res.cy * zoom) - 1,
+          Math.round(zoom) + 2,
+          Math.round(zoom) + 2
+        );
+        loupeCtx.strokeStyle = "rgba(0,0,0,0.55)";
+        loupeCtx.lineWidth = 1;
+        loupeCtx.strokeRect(
+          Math.round(res.cx * zoom) - 2,
+          Math.round(res.cy * zoom) - 2,
+          Math.round(zoom) + 4,
+          Math.round(zoom) + 4
+        );
+
+        $loupeChip.style.background = res.hex || "transparent";
+        $loupeText.textContent = phase === "drawing"
+          ? Math.round(sel.w) + " × " + Math.round(sel.h)
+          : Math.round(px) + ", " + Math.round(py) + (res.hex ? "  " + res.hex : "");
+
+        placeLoupe(px, py);
+        $loupe.classList.add("show");
+      }
+
+      function placeLoupe(px, py) {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const lw = $loupe.offsetWidth || 132;
+        const lh = $loupe.offsetHeight || 156;
+        let lx = px + LOUPE_OFFSET;
+        let ly = py + LOUPE_OFFSET;
+        if (lx + lw > vw - 4) lx = px - LOUPE_OFFSET - lw;
+        if (ly + lh > vh - 4) ly = py - LOUPE_OFFSET - lh;
+        $loupe.style.left = Math.round(Math.max(4, lx)) + "px";
+        $loupe.style.top = Math.round(Math.max(4, ly)) + "px";
+      }
+
+      function hideLoupe() {
+        $loupe.classList.remove("show");
+        loupePending = null;
+      }
+
+      /* ── Confirm / cancel ── */
+      function confirmSelectionNow() {
+        const r = clampRect(sel);
+        if (r.w < 1 || r.h < 1) return;
+        if (mode === "video") {
+          window.qgn.startVideoRecording({ x: r.x, y: r.y, width: r.w, height: r.h });
+        } else {
+          sendCapture({ x: r.x, y: r.y, width: r.w, height: r.h });
+        }
+        clear();
+      }
+
+      function captureFullScreen() {
+        if (mode === "video") {
+          window.qgn.startVideoRecording({ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight });
+        } else {
+          sendCapture({ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight });
+        }
+        clear();
+      }
+
+      /* ── Pointer ── */
       document.addEventListener("mousedown", (e) => {
+        if (e.button !== 0) return;
         window.qgn.closeMicDropdown();
-        isSelecting = true;
-        startX = endX = e.clientX;
-        startY = endY = e.clientY;
+        if (e.target.closest("#bar")) return; // buttons own their own clicks
+
+        cursorX = e.clientX;
+        cursorY = e.clientY;
+
+        const grip = handleAt(e.clientX, e.clientY);
+        if (grip) {
+          drag = { type: "resize", grip, startX: e.clientX, startY: e.clientY, orig: { ...sel } };
+          return;
+        }
+        if (phase === "adjusting" && pointInRect(e.clientX, e.clientY, sel)) {
+          drag = { type: "move", startX: e.clientX, startY: e.clientY, orig: { ...sel } };
+          document.body.style.cursor = "move";
+          return;
+        }
+
+        drag = { type: "new", startX: e.clientX, startY: e.clientY, moved: false };
+        phase = "drawing";
+        sel = { x: e.clientX, y: e.clientY, w: 0, h: 0 };
+        hideLoupe();
         scheduleRender();
       });
 
       document.addEventListener("mousemove", (e) => {
-        if (!isSelecting) return;
-        endX = e.clientX;
-        endY = e.clientY;
+        cursorX = e.clientX;
+        cursorY = e.clientY;
+
+        if (!drag) {
+          updateCursor(e.clientX, e.clientY);
+          if (phase === "idle") {
+            const win = windowAt(e.clientX, e.clientY);
+            if (win !== hoverRect) { hoverRect = win; scheduleRender(); }
+            requestLoupe();
+          }
+          return;
+        }
+
+        if (drag.type === "new") {
+          if (!drag.moved &&
+              (Math.abs(e.clientX - drag.startX) > 2 || Math.abs(e.clientY - drag.startY) > 2)) {
+            drag.moved = true;
+          }
+          sel = rectFromPoints(drag.startX, drag.startY, e.clientX, e.clientY, e.shiftKey);
+          if (!e.altKey) sel = snapRect(sel);
+          requestLoupe();
+        } else if (drag.type === "move") {
+          const dx = e.clientX - drag.startX;
+          const dy = e.clientY - drag.startY;
+          sel = clampMove({ x: drag.orig.x + dx, y: drag.orig.y + dy, w: drag.orig.w, h: drag.orig.h });
+        } else {
+          sel = resizeBy(drag.orig, drag.grip, e.clientX - drag.startX, e.clientY - drag.startY);
+          if (!e.altKey) sel = snapRect(sel);
+        }
         scheduleRender();
       });
 
-      document.addEventListener("mouseup", () => {
-        if (!isSelecting) return;
-        isSelecting = false;
+      function resizeBy(orig, grip, dx, dy) {
+        let { x, y, w, h } = orig;
+        if (grip.includes("w")) { x = orig.x + dx; w = orig.w - dx; }
+        if (grip.includes("e")) { w = orig.w + dx; }
+        if (grip.includes("n")) { y = orig.y + dy; h = orig.h - dy; }
+        if (grip.includes("s")) { h = orig.h + dy; }
+        // Dragging a side past its opposite flips the rect instead of collapsing.
+        if (w < 0) { x += w; w = -w; }
+        if (h < 0) { y += h; h = -h; }
+        return clampRect({ x, y, w, h });
+      }
 
-        const x = Math.min(startX, endX);
-        const y = Math.min(startY, endY);
-        const w = Math.abs(endX - startX);
-        const h = Math.abs(endY - startY);
+      document.addEventListener("mouseup", (e) => {
+        if (!drag) return;
+        const wasNew = drag.type === "new";
+        const moved = drag.moved;
+        drag = null;
+        document.body.style.cursor = "crosshair";
 
-        if (w < 5 || h < 5) {
-          reset();
+        if (wasNew && !moved) {
+          // A click, not a drag: take the window under the cursor if we know of
+          // one, otherwise treat it as a mis-click and stay put.
+          const win = windowAt(e.clientX, e.clientY);
+          if (win) {
+            sel = clampRect(win);
+            phase = "adjusting";
+            if (!confirmSelection) { confirmSelectionNow(); return; }
+            scheduleRender();
+            return;
+          }
+          clearSelection();
           return;
         }
 
-        if (mode === "video") {
-          window.qgn.startVideoRecording({ x, y, width: w, height: h });
-        } else {
-          sendCapture({ x, y, width: w, height: h });
+        if (sel.w < MIN_DRAG || sel.h < MIN_DRAG) {
+          clearSelection();
+          return;
         }
-        clear();
+
+        sel = clampRect(sel);
+        phase = "adjusting";
+        hideLoupe();
+        if (!confirmSelection) { confirmSelectionNow(); return; }
+        scheduleRender();
       });
 
+      // Double-clicking inside a settled selection takes it.
+      document.addEventListener("dblclick", (e) => {
+        if (phase === "adjusting" && pointInRect(e.clientX, e.clientY, sel)) {
+          confirmSelectionNow();
+        }
+      });
+
+      $btnConfirm.addEventListener("click", (e) => {
+        e.stopPropagation();
+        confirmSelectionNow();
+      });
+
+      $btnCancel.addEventListener("click", (e) => {
+        e.stopPropagation();
+        clearSelection();
+      });
+
+      /* ── Keyboard ── */
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
-          window.qgn.cancel();
-          clear();
+          // Layered back-out: drop the selection first, leave only if there
+          // isn't one.
+          if (phase === "adjusting" || phase === "drawing") {
+            drag = null;
+            clearSelection();
+          } else {
+            window.qgn.cancel();
+            clear();
+          }
           return;
         }
-        // Space/Enter grabs the whole display (screenshot mode only).
-        if ((e.key === " " || e.key === "Enter") && mode === "screenshot" && !isSelecting) {
+
+        if (e.key === "Enter") {
           e.preventDefault();
-          sendCapture({ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight });
-          clear();
+          if (phase === "adjusting") confirmSelectionNow();
+          else captureFullScreen();
+          return;
+        }
+
+        if (e.key === " " && phase !== "adjusting" && !drag) {
+          e.preventDefault();
+          captureFullScreen();
+          return;
+        }
+
+        if (phase === "adjusting" && e.key.startsWith("Arrow")) {
+          e.preventDefault();
+          const step = e.ctrlKey ? NUDGE_LARGE : NUDGE_SMALL;
+          const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+          const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+          if (e.shiftKey) {
+            // Shift resizes from the bottom-right rather than moving.
+            sel = clampRect({ x: sel.x, y: sel.y, w: Math.max(1, sel.w + dx), h: Math.max(1, sel.h + dy) });
+          } else {
+            sel = clampMove({ x: sel.x + dx, y: sel.y + dy, w: sel.w, h: sel.h });
+          }
+          scheduleRender();
         }
       });
+
+      /* ── Lifecycle ── */
+      function resetState() {
+        phase = "idle";
+        drag = null;
+        hoverRect = null;
+        sel = { x: 0, y: 0, w: 0, h: 0 };
+        document.body.style.cursor = "crosshair";
+        if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+      }
+
+      // Drop the selection and go back to aiming. Deliberately keeps `mode`:
+      // backing out of a recording area must not turn the overlay into a
+      // screenshot overlay.
+      function clearSelection() {
+        resetState();
+        showInitial();
+      }
 
       function reset() {
         mode = "screenshot";
-        isSelecting = false;
-        startX = startY = endX = endY = 0;
-        if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
-        showInitial();
+        $btnConfirm.textContent = "Capture";
+        clearSelection();
       }
 
       function resetForVideo() {
         mode = "video";
-        isSelecting = false;
-        startX = startY = endX = endY = 0;
-        if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
-        showInitial();
+        $btnConfirm.textContent = "Record";
+        clearSelection();
       }
 
       function showRecordingBorder(region) {
@@ -347,15 +991,18 @@
       }
 
       function clear() {
-        isSelecting = false;
-        startX = startY = endX = endY = 0;
-        if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+        resetState();
+        $btnConfirm.textContent = "Capture";
         hideAllSelection();
       }
 
       // IPC-driven overlay commands (replaces executeJavaScript calls)
       window.qgn.onClear(() => clear());
-      window.qgn.onResetForVideo(() => resetForVideo());
+      window.qgn.onResetForVideo((data) => {
+        resetForVideo();
+        applyOptions(data);
+        loadWindowRects();
+      });
       window.qgn.onShowRecordingBorder((region) => showRecordingBorder(region));
       window.qgn.onHideRecordingBorder(() => hideRecordingBorder());
     </script>

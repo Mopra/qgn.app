@@ -34,9 +34,11 @@ QGN (Quick Gen) is a lightweight, open-source desktop screenshot tool for Window
 
 ### Capture
 - **Instant hotkey capture:** `Ctrl+Q` activates a fullscreen overlay with crosshair cursor
-- **Pixel-precise region selection:** Click and drag to capture exactly what you need
-- **Full-screen capture:** Press `Space` on the overlay (or use the tray menu) to grab the whole display
-- **Real-time dimension display:** See pixel width and height as you drag
+- **Adjustable selection:** Releasing the mouse settles the rect rather than taking it. Drag the edges, corners or the middle, nudge with the arrow keys, then confirm with `Enter`, a double-click, or the button. (Switchable back to capture-on-release.)
+- **Snap to a window:** Click a window to capture exactly it; edges snap to nearby windows as you drag (hold `Alt` to ignore them)
+- **Pixel loupe:** A magnifier follows the cursor with a live coordinate and colour readout
+- **Full-screen capture:** Press `Space` on the overlay (or use the tray menu) to grab the whole display, in both capture and record modes
+- **Real-time dimension display:** See pixel width and height as you drag, and `Shift` to constrain to a square
 - **Multi-monitor support:** Works across all connected displays seamlessly
 - **Clipboard-first:** Every capture is on your clipboard before the overlay closes
 - **Multiple formats:** Copy as PNG (default), JPG, WebP, or base64 Data URI (with adjustable JPG/WebP quality)
@@ -50,6 +52,7 @@ QGN (Quick Gen) is a lightweight, open-source desktop screenshot tool for Window
 - **Visual indicator:** Pulsing red border shows what's being recorded
 
 ### Floating Previews
+- **Recent captures:** The last twelve captures stay in the tray menu, so a card that timed out is not gone. Switchable off (which also forgets what's stored).
 - **Always-on-top cards:** Captures appear as draggable, resizable preview windows
 - **Drag out to any app:** Drag the thumbnail straight into Slack, email, or an editor
 - **Copy again:** Re-copy a capture to the clipboard with one click
@@ -66,12 +69,14 @@ in both, and on clips as well as stills.
 
 **Annotation tools**
 - **Drawing:** freehand drawing, arrows, and shapes (rectangle, ellipse, diamond, line)
-- **Text:** add text labels anywhere, in three sizes
+- **Text:** add text labels anywhere, in three sizes; double-click one to re-edit it
 - **Numbered callouts:** auto-incrementing numbered markers
 - **Redaction:** solid block (default, unrecoverable) or pixelate, for hiding sensitive information
-- **Crop:** trim down to what matters, and undo it later
+- **Editable after placing:** pick the pointer (V), click a mark to select it, then move it, resize it by its handles, recolour it, or delete it with `Del`
+- **Crop:** adjust a rect until it's right, then apply it (and undo it later)
 - **Cursor stamp:** drop a mouse pointer anywhere (captures are cursor-free, so you place it deliberately)
 - **Six colors,** and every tool on a single-key shortcut (V, D, A, S, T, X, C, P, R)
+- **Zoom and pan:** `Ctrl`+wheel to zoom about the cursor, wheel or middle-drag to pan, `Ctrl+0` to fit
 - **Undo and redo:** `Ctrl+Z` / `Ctrl+Y` across annotations and crops alike
 
 **Composition**
@@ -84,7 +89,7 @@ in both, and on clips as well as stills.
 - **Trim:** set in and out points on the timeline
 - **Zoom keyframes:** auto-generated from your clicks, or placed by hand with easing and a focus point
 - **Synthetic cursor:** an optional styled pointer with click ripples
-- **Export:** MP4, WebM, GIF, or animated WebP, with an output size estimate
+- **Export:** MP4, WebM, GIF, or animated WebP, with an output size estimate. MP4 and WebM encode faster than real time (WebCodecs), with a real-time fallback if the system can't.
 
 ### System Integration
 - **System tray:** Runs invisibly in the tray, no window to manage
@@ -101,12 +106,13 @@ in both, and on clips as well as stills.
 |-----------|-----------|
 | Desktop shell | Electron |
 | Image processing | Sharp |
+| Video encoding | WebCodecs, muxed by [mp4-muxer / webm-muxer](studio/vendor/README.md) |
 | UI | Vanilla HTML/CSS/JS |
 | Build system | electron-builder |
 | Auto-updates | electron-updater |
 | Distribution | GitHub Releases (NSIS installer) |
 
-No framework overhead. Vanilla JavaScript throughout. The entire app is a single `main.js` file plus HTML views.
+No framework overhead. Vanilla JavaScript throughout. The entire app is a single `main.js` file plus HTML views. The only third-party code in the renderer is the two vendored container writers in [studio/vendor/](studio/vendor/).
 
 ## Download
 
@@ -147,11 +153,13 @@ qgn.app/
 ├── preview.html             # Floating preview card
 ├── studio.html              # Studio: the editor shell (markup + compose, stills + clips)
 ├── studio/                  # Studio modules (scene, annotation, motion, video, sidebar)
+│   └── vendor/              # The two vendored MP4/WebM muxers, and why they're here
 ├── settings.html            # Settings panel
 ├── record-control.html      # Recording control bar
 ├── welcome.html             # First-run welcome screen
 ├── *-preload.js             # IPC bridge scripts for each window
 ├── lib/                     # Pure main-process logic, unit tested on its own
+│   └── window-rects.ps1     # Window-bounds helper for snap-to-window
 ├── assets/                  # Logos and images
 ├── icons/                   # App icons (tray, installer)
 ├── scripts/                 # Checks, tests, and icon generation
@@ -162,15 +170,17 @@ qgn.app/
 ### Tests
 
 ```bash
-npm run check   # syntax, HTML inline scripts, lib unit tests, main-process boot
-npm run smoke   # boots a hidden Studio window and drives it end to end
-npm test        # both
+npm run check          # syntax, HTML inline scripts, lib unit tests, main-process boot
+npm run smoke          # boots a hidden Studio window and drives it end to end
+npm run smoke:overlay  # boots the capture overlay and drives a real selection
+npm test               # all three
 ```
 
-`check` needs no dependencies and no display, and runs on every push. `smoke`
-launches a real Electron window (hidden) and renders an actual clip and
-animation, so it needs a desktop session; run it locally for anything touching
-Studio.
+`check` needs no dependencies and no display, and runs on every push. The smoke
+suites launch a real Electron window (hidden): `smoke` renders an actual clip,
+animation and encoded export, and `smoke:overlay` drives the selection with
+synthetic mouse and key events. Both need a desktop session, so run them locally
+for anything touching Studio or the overlay.
 
 ## Related Repositories
 

@@ -442,6 +442,60 @@
         sepBehav.className = "separator";
         panel.appendChild(sepBehav);
 
+        // Whether releasing the mouse settles the selection for adjustment or
+        // captures immediately (the pre-0.1.17 behaviour).
+        const confirmRow = document.createElement("div");
+        confirmRow.className = "item";
+
+        const confirmLabel = document.createElement("span");
+        confirmLabel.className = "item-label";
+        confirmLabel.textContent = "Adjust selection before capture";
+
+        const confirmToggle = document.createElement("div");
+        confirmToggle.className = "toggle" + (settings.confirmSelection ? " on" : "");
+        const confirmKnob = document.createElement("div");
+        confirmKnob.className = "toggle-knob";
+        confirmToggle.appendChild(confirmKnob);
+
+        confirmRow.appendChild(confirmLabel);
+        confirmRow.appendChild(confirmToggle);
+        confirmRow.addEventListener("click", () => {
+          settings.confirmSelection = !settings.confirmSelection;
+          window.qgnSettings.setConfirmSelection(settings.confirmSelection);
+          render(settings);
+        });
+        panel.appendChild(confirmRow);
+
+        // Recent-capture ring, so a dismissed card is recoverable from the tray.
+        const historyRow = document.createElement("div");
+        historyRow.className = "item";
+
+        const historyLabel = document.createElement("span");
+        historyLabel.className = "item-label";
+        historyLabel.textContent = "Keep recent captures";
+
+        const historyToggle = document.createElement("div");
+        historyToggle.className = "toggle" + (settings.keepHistory ? " on" : "");
+        const historyKnob = document.createElement("div");
+        historyKnob.className = "toggle-knob";
+        historyToggle.appendChild(historyKnob);
+
+        historyRow.appendChild(historyLabel);
+        historyRow.appendChild(historyToggle);
+        historyRow.addEventListener("click", () => {
+          settings.keepHistory = !settings.keepHistory;
+          window.qgnSettings.setKeepHistory(settings.keepHistory);
+          render(settings);
+        });
+        panel.appendChild(historyRow);
+
+        if (settings.keepHistory) {
+          const historyNote = document.createElement("div");
+          historyNote.className = "folder-path";
+          historyNote.textContent = "The last 12 captures stay in the tray menu";
+          panel.appendChild(historyNote);
+        }
+
         // Auto-dismiss timer for preview cards (0 = never)
         const dismissSeg = makeSegmented(
           [

@@ -1,13 +1,29 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+// Main sends the source the moment the window is ready to show, which routinely
+// beats studio/app.js to the punch: the page can paint (and so be "ready")
+// before its eight script tags have finished loading. Listening here, in the
+// preload that always runs first, means the payload is caught either way; it
+// waits in `pendingLoad` until the renderer asks for it.
+let pendingLoad = null;
+let loadHandler = null;
+ipcRenderer.on("studio-load", (_e, data) => {
+  if (loadHandler) loadHandler(data);
+  else pendingLoad = data;
+});
+
 // One bridge for the whole Studio: stills, clips and markup all run in the same
 // window, so they share a single API surface.
 contextBridge.exposeInMainWorld("studio", {
   // Main sends the source once on open: either { kind:"image", imageDataUrl }
   // or { kind:"video", videoBytes, mimeType, motion }, plus the editor mode.
   onLoad: (cb) => {
-    ipcRenderer.removeAllListeners("studio-load");
-    ipcRenderer.on("studio-load", (_e, data) => cb(data));
+    loadHandler = cb;
+    if (pendingLoad) {
+      const data = pendingLoad;
+      pendingLoad = null;
+      cb(data);
+    }
   },
 
   // ── Still output ──

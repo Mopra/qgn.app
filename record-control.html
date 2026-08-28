@@ -212,6 +212,33 @@
         font-weight: 500;
         letter-spacing: 0.02em;
       }
+
+      /* Stays up for the whole recording when a requested audio source failed
+         to open, so a silent take is obvious while it can still be redone. */
+      .warn {
+        display: none;
+        align-items: center;
+        gap: 5px;
+        background: rgba(255, 159, 10, 0.18);
+        border: 1px solid rgba(255, 159, 10, 0.45);
+        color: #ffcf7a;
+        border-radius: 8px;
+        padding: 3px 8px;
+        font-size: 11px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+
+      .warn.show {
+        display: flex;
+      }
+
+      .warn svg {
+        width: 12px;
+        height: 12px;
+        fill: currentColor;
+        flex-shrink: 0;
+      }
     </style>
   </head>
   <body>
@@ -248,6 +275,12 @@
       <div class="phase" id="recordingPhase">
         <div class="dot"></div>
         <span class="timer" id="timer">0:00</span>
+        <div class="warn" id="audioWarn" role="status">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2 1 21h22L12 2zm1 15h-2v-2h2v2zm0-4h-2V9h2v4z"/>
+          </svg>
+          <span id="audioWarnText">No audio</span>
+        </div>
         <div class="sep"></div>
         <button class="toggle-btn" id="pauseBtn" title="Pause">
           <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
@@ -264,6 +297,8 @@
       const setupPhase = document.getElementById("setupPhase");
       const recordingPhase = document.getElementById("recordingPhase");
       const timerEl = document.getElementById("timer");
+      const audioWarn = document.getElementById("audioWarn");
+      const audioWarnText = document.getElementById("audioWarnText");
       const stopBtn = document.getElementById("stopBtn");
       const pauseBtn = document.getElementById("pauseBtn");
       const audioBtn = document.getElementById("audioBtn");
@@ -291,6 +326,27 @@
       let countingDown = false;
       let countdownTimer = null;
       let recordingAborted = false;
+
+      // An audio source the user asked for but that would not open. The badge
+      // stays up for the whole take and a toast fires once, so the problem is
+      // caught while the recording can still be redone rather than on playback.
+      function reportAudioFailure(failed) {
+        const both = failed.length > 1;
+        audioWarnText.textContent = both
+          ? "No audio"
+          : failed[0] === "microphone"
+            ? "No mic"
+            : "No system audio";
+        audioWarn.classList.add("show");
+        // The bar is sized for dot + timer + controls; the badge needs its own
+        // room or it would be clipped by the fixed window.
+        window.qgnRecord.requestWidth(400);
+        const names = both ? "Microphone and system audio" : failed[0] === "microphone" ? "Microphone" : "System audio";
+        const verb = both ? "are" : "is";
+        window.qgnRecord.reportError(
+          names + " " + verb + " unavailable. Recording without " + (both ? "them" : "it") + "."
+        );
+      }
 
       audioBtn.addEventListener("click", () => {
         audioEnabled = !audioEnabled;
@@ -326,6 +382,7 @@
         pauseBtn.classList.remove("active");
         pauseBtn.title = "Pause";
         pauseBtn.innerHTML = PAUSE_ICON;
+        audioWarn.classList.remove("show");
 
         // Optional 3-2-1 pre-roll countdown (shown in the timer slot).
         if (countdown && countdown > 0) {
@@ -456,6 +513,11 @@
             audioCtx = new AudioContext();
             mixedDest = audioCtx.createMediaStreamDestination();
             let connectedSources = 0;
+            // A source the user explicitly switched on that would not open.
+            // Recording still proceeds (the take is usually worth keeping), but
+            // silently is not an option: a silent recording that is only
+            // discovered on playback wastes the whole take.
+            const failedSources = [];
 
             if (audioEnabled) {
               try {
@@ -471,7 +533,10 @@
                 allStreams.push(sysStream);
                 audioCtx.createMediaStreamSource(sysStream).connect(mixedDest);
                 connectedSources++;
-              } catch (e) { console.warn("System audio unavailable:", e.message); }
+              } catch (e) {
+                console.warn("System audio unavailable:", e.message);
+                failedSources.push("system audio");
+              }
             }
 
             if (micEnabled) {
@@ -483,7 +548,10 @@
                 allStreams.push(micStream);
                 audioCtx.createMediaStreamSource(micStream).connect(mixedDest);
                 connectedSources++;
-              } catch (e) { console.warn("Microphone unavailable:", e.message); }
+              } catch (e) {
+                console.warn("Microphone unavailable:", e.message);
+                failedSources.push("microphone");
+              }
             }
 
             // Only attach audio if a source actually connected — otherwise the
@@ -495,6 +563,8 @@
               audioCtx.close();
               audioCtx = null;
             }
+
+            if (failedSources.length) reportAudioFailure(failedSources);
           }
 
           const hasAudio = recordingStream.getAudioTracks().length > 0;

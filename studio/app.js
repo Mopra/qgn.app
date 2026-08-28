@@ -39,22 +39,113 @@ function loopTick() {
   if (stillPlaying || needsPaint) ensureLoop();
 }
 
+/* ───────────────────────── View: zoom and pan ─────────────────────────
+   The preview used to be locked to fit-to-window, which on a 4K capture put
+   two or three source pixels behind every screen pixel and made precise
+   annotation impossible.
+
+   Zoom is applied by growing the canvas itself rather than by transforming the
+   scene inside a fixed-size canvas. That matters: every coordinate helper in
+   annotate.js derives its scale from the canvas's client rect, so growing the
+   element keeps hit testing, the crop rect and the selection box correct with
+   no changes to any of them. Panning is a CSS translate, which the same client
+   rect already accounts for. */
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 8;
+const PREVIEW_PAD = 36;
+// A deep zoom on a large scene could otherwise ask for a backing store big
+// enough to fail allocation, so the device-pixel ratio gives way first.
+const MAX_CANVAS_PIXELS = 16e6;
+
+const view = { zoom: 1, panX: 0, panY: 0 };
+
+function clampZoom(z) { return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z)); }
+
+// Pan is locked to zero while the whole scene fits, and otherwise limited to
+// the point where an edge of the image reaches the edge of the viewport.
+function clampPan(dispW, dispH, areaRect) {
+  const overX = Math.max(0, (dispW - areaRect.width) / 2);
+  const overY = Math.max(0, (dispH - areaRect.height) / 2);
+  view.panX = Math.max(-overX, Math.min(overX, view.panX));
+  view.panY = Math.max(-overY, Math.min(overY, view.panY));
+}
+
+function resetView() {
+  view.zoom = 1;
+  view.panX = 0;
+  view.panY = 0;
+  syncZoomUI();
+  requestPaint();
+}
+
+/* Zoom about a point, so whatever is under the cursor stays under it. The
+   canvas is centred by its flex parent, so growing it by k moves a point at
+   fraction f along the axis by (f - 0.5) * size * (k - 1); the pan cancels
+   exactly that. */
+function zoomAt(clientX, clientY, factor) {
+  const next = clampZoom(view.zoom * factor);
+  if (next === view.zoom) return;
+  const rect = previewCanvas.getBoundingClientRect();
+  const k = next / view.zoom;
+  if (rect.width && rect.height) {
+    const fx = (clientX - rect.left) / rect.width;
+    const fy = (clientY - rect.top) / rect.height;
+    view.panX -= (fx - 0.5) * rect.width * (k - 1);
+    view.panY -= (fy - 0.5) * rect.height * (k - 1);
+  }
+  view.zoom = next;
+  syncZoomUI();
+  requestPaint();
+}
+
+// Zoom about the middle of the viewport, for the buttons and the shortcuts.
+function zoomByStep(factor) {
+  const r = previewArea.getBoundingClientRect();
+  zoomAt(r.left + r.width / 2, r.top + r.height / 2, factor);
+}
+
+function panBy(dx, dy) {
+  view.panX += dx;
+  view.panY += dy;
+  requestPaint();
+}
+
+function syncZoomUI() {
+  const hud = document.getElementById("zoomHud");
+  if (!hud) return;
+  hud.classList.toggle("hidden", !hasSource());
+  const label = document.getElementById("zoomLabel");
+  if (label) label.textContent = Math.round(view.zoom * 100) + "%";
+}
+
 function renderPreview() {
   if (!hasSource()) return;
   const L = layout();
   const dpr = window.devicePixelRatio || 1;
   const areaRect = previewArea.getBoundingClientRect();
-  const pad = 36;
-  const availW = Math.max(50, areaRect.width - pad * 2);
-  const availH = Math.max(50, areaRect.height - pad * 2);
-  const fit = Math.min(availW / L.sceneW, availH / L.sceneH);
+  const availW = Math.max(50, areaRect.width - PREVIEW_PAD * 2);
+  const availH = Math.max(50, areaRect.height - PREVIEW_PAD * 2);
+  const fit = Math.min(availW / L.sceneW, availH / L.sceneH) * view.zoom;
   const dispW = L.sceneW * fit;
   const dispH = L.sceneH * fit;
+
+  clampPan(dispW, dispH, areaRect);
   previewCanvas.style.width = dispW + "px";
   previewCanvas.style.height = dispH + "px";
-  previewCanvas.width = Math.max(1, Math.round(dispW * dpr));
-  previewCanvas.height = Math.max(1, Math.round(dispH * dpr));
-  renderSceneScaled(previewCtx, fit * dpr, fit * dpr, L);
+  previewCanvas.style.transform =
+    view.panX || view.panY ? `translate(${view.panX}px, ${view.panY}px)` : "";
+
+  // Trade device pixels away rather than fail to allocate at deep zoom.
+  const wanted = dispW * dispH * dpr * dpr;
+  const px = wanted > MAX_CANVAS_PIXELS ? dpr * Math.sqrt(MAX_CANVAS_PIXELS / wanted) : dpr;
+  previewCanvas.width = Math.max(1, Math.round(dispW * px));
+  previewCanvas.height = Math.max(1, Math.round(dispH * px));
+  renderSceneScaled(previewCtx, fit * px, fit * px, L);
+  // The crop rect and the selection box are editor chrome, not part of the
+  // composition: painting them here, on top of the finished scene, keeps them
+  // out of every export path.
+  drawCropOverlay(previewCtx, L);
+  drawSelectionOverlay(previewCtx, L);
 }
 
 // Toggle the import prompt against the live canvas.
@@ -62,6 +153,7 @@ function updateEmptyState() {
   const has = hasSource();
   emptyState.classList.toggle("hidden", has || isVideoSource());
   previewCanvas.classList.toggle("hidden", !has);
+  syncZoomUI();
 }
 
 /* ───────────────────────── Toast ───────────────────────── */
@@ -174,10 +266,13 @@ function loadImageSource(dataUrl) {
     state.crop = null;
     state.strokes = [];
     state.calloutCounter = 1;
+    state.selectedStrokeId = null;
     // Drop anything left over from a clip, or the still would render through a
     // stale camera with a synthetic cursor on top of it.
     resetVideoState();
     resetHistory();
+    // A new image starts fit to the window, not at the last one's zoom.
+    resetView();
     syncAnnotationUI();
     applyVideoChrome();
     updateEmptyState();
@@ -225,6 +320,47 @@ function init() {
   previewCanvas.addEventListener("pointermove", (e) => { if (!exporting) annotationPointerMove(e); });
   previewCanvas.addEventListener("pointerup", annotationPointerUp);
   previewCanvas.addEventListener("pointercancel", annotationPointerUp);
+
+  /* Zoom and pan. Ctrl/Cmd + wheel zooms about the cursor; a plain wheel pans,
+     which only does anything once the image is bigger than the viewport. */
+  previewArea.addEventListener("wheel", (e) => {
+    if (exporting || !hasSource()) return;
+    e.preventDefault();
+    if (e.ctrlKey || e.metaKey) {
+      zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.002));
+      return;
+    }
+    if (e.shiftKey) panBy(-e.deltaY - e.deltaX, 0);
+    else panBy(-e.deltaX, -e.deltaY);
+  }, { passive: false });
+
+  // Middle-drag pans, the way it does in every other canvas editor. It is on
+  // the area rather than the canvas so the grab still works in the surround.
+  let panDrag = null;
+  previewArea.addEventListener("pointerdown", (e) => {
+    if (e.button !== 1 || exporting || !hasSource()) return;
+    e.preventDefault();
+    panDrag = { x: e.clientX, y: e.clientY };
+    previewArea.style.cursor = "grabbing";
+    try { previewArea.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  previewArea.addEventListener("pointermove", (e) => {
+    if (!panDrag) return;
+    panBy(e.clientX - panDrag.x, e.clientY - panDrag.y);
+    panDrag = { x: e.clientX, y: e.clientY };
+  });
+  const endPan = (e) => {
+    if (!panDrag) return;
+    panDrag = null;
+    previewArea.style.cursor = "";
+    try { previewArea.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  previewArea.addEventListener("pointerup", endPan);
+  previewArea.addEventListener("pointercancel", endPan);
+
+  document.getElementById("zoomInBtn").addEventListener("click", () => zoomByStep(1.25));
+  document.getElementById("zoomOutBtn").addEventListener("click", () => zoomByStep(1 / 1.25));
+  document.getElementById("zoomResetBtn").addEventListener("click", resetView);
 
   /* Top bar. */
   document.getElementById("cancelBtn").addEventListener("click", requestClose);
@@ -319,11 +455,17 @@ function onKeyDown(e) {
 
   if (e.key === "Escape") {
     if (pickingFocus) { setPickingFocus(false); return; }
+    if (state.selectedStrokeId != null) { selectStroke(null); return; }
     if (state.selectedSegId) { selectSeg(null); return; }
+    // In crop mode Escape backs out one step at a time: first the pending
+    // rect, then the tool.
+    if (state.tool === "crop" && cancelCropSel()) return;
     if (state.tool !== "none") { selectTool("none"); return; }
     requestClose();
     return;
   }
+
+  if (e.key === "Enter" && state.tool === "crop") { e.preventDefault(); commitCropSel(); return; }
 
   const mod = e.ctrlKey || e.metaKey;
   if (mod) {
@@ -334,6 +476,18 @@ function onKeyDown(e) {
     if (e.key === "s" || e.key === "S") { e.preventDefault(); if (!isVideoSource()) doSave(); return; }
     if (e.key === "c" || e.key === "C") { e.preventDefault(); if (!isVideoSource()) doCopy(); return; }
     if (e.key === "e" || e.key === "E") { e.preventDefault(); if (isVideoSource()) startExport(); return; }
+    // Zoom, on the keys every editor uses for it.
+    if (e.key === "0") { e.preventDefault(); resetView(); return; }
+    if (e.key === "=" || e.key === "+") { e.preventDefault(); zoomByStep(1.25); return; }
+    if (e.key === "-" || e.key === "_") { e.preventDefault(); zoomByStep(1 / 1.25); return; }
+    return;
+  }
+
+  // A selected annotation owns Delete before a selected zoom segment does:
+  // the pointer tool is what put it there.
+  if ((e.key === "Delete" || e.key === "Backspace") && state.selectedStrokeId != null) {
+    e.preventDefault();
+    deleteSelectedStroke();
     return;
   }
 

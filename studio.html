@@ -408,6 +408,23 @@
         border-color: rgba(255, 255, 255, 0.12);
         color: #fff;
       }
+      .size-btn[disabled] { opacity: 0.35; cursor: default; pointer-events: none; }
+      .size-btn.primary {
+        background: #007aff;
+        color: #fff;
+        font-size: 12px;
+      }
+      .size-btn.primary:hover { background: #1a88ff; color: #fff; }
+
+      /* Live pixel size of the pending crop */
+      .crop-dims {
+        font-size: 12px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: rgba(255, 255, 255, 0.55);
+        white-space: nowrap;
+        padding: 0 4px;
+      }
 
       /* Shape dropdown */
       .shape-wrapper { position: relative; flex-shrink: 0; }
@@ -503,12 +520,50 @@
         overflow: hidden;
       }
       #previewCanvas {
-        max-width: 100%;
-        max-height: 100%;
+        /* Sized in JS: fit-to-window times the zoom. No max-width here, or a
+           zoomed-in canvas would be squeezed back to the viewport. */
+        flex: none;
         border-radius: 2px;
         box-shadow: 0 10px 50px rgba(0, 0, 0, 0.55);
         touch-action: none;
       }
+
+      /* ── Zoom readout ── */
+      .zoom-hud {
+        position: absolute;
+        right: 14px;
+        bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 3px;
+        border-radius: 10px;
+        background: rgba(20, 20, 20, 0.72);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        z-index: 4;
+      }
+      .zoom-hud.hidden { display: none; }
+      .zoom-hud button {
+        min-width: 26px;
+        height: 24px;
+        padding: 0 6px;
+        border: none;
+        border-radius: 7px;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.72);
+        font-family: inherit;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+      .zoom-hud button:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+      }
+      .zoom-hud #zoomLabel { min-width: 40px; display: inline-block; }
       .preview-area.drawing #previewCanvas { cursor: crosshair; }
       .preview-area.picking-focus, .preview-area.picking-focus #previewCanvas { cursor: crosshair; }
 
@@ -998,7 +1053,7 @@
               <button class="tool-btn" data-tool="cursor" title="Cursor stamp (P)">
                 <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M5 2 L5 19 L8.7 15.3 L11 20.4 L13.1 19.5 L10.7 14.5 L15.5 14.5 Z"/></svg>
               </button>
-              <button class="tool-btn" data-tool="crop" title="Crop (R)">
+              <button class="tool-btn" data-tool="crop" title="Crop (R): drag the sides or corners, then Apply">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>
               </button>
             </div>
@@ -1042,6 +1097,16 @@
               <button class="size-btn active" data-pixel="M" style="font-size:13px" title="Medium pixels">M</button>
               <button class="size-btn" data-pixel="L" style="font-size:15px" title="Heavy pixels">L</button>
             </div>
+
+            <div class="opt-row hidden" id="cropRow">
+              <span class="crop-dims" id="cropDims">0 × 0</span>
+              <button class="size-btn primary" id="applyCropBtn" title="Apply the crop (Enter)">Apply</button>
+            </div>
+
+            <div class="opt-row hidden" id="selectionRow">
+              <span class="crop-dims" id="selectionLabel">Selected</span>
+              <button class="size-btn" id="deleteStrokeBtn" style="font-size:12px" title="Delete the selected annotation (Del)">Delete</button>
+            </div>
           </div>
 
           <div class="preview-area" id="previewArea">
@@ -1052,6 +1117,12 @@
               <div class="empty-sub">Click to browse, drop an image here, or paste (Ctrl+V)</div>
             </div>
             <input type="file" id="importInput" accept="image/*" class="hidden" />
+
+            <div class="zoom-hud hidden" id="zoomHud">
+              <button type="button" id="zoomOutBtn" title="Zoom out (Ctrl −)">−</button>
+              <button type="button" id="zoomResetBtn" title="Fit to window (Ctrl 0)"><span id="zoomLabel">100%</span></button>
+              <button type="button" id="zoomInBtn" title="Zoom in (Ctrl +)">+</button>
+            </div>
 
             <div class="video-status" id="videoStatus">
               <div class="spinner"></div>
@@ -1112,6 +1183,21 @@
         <div class="help-row"><span>Text / redact / callout</span><kbd>T</kbd> <kbd>X</kbd> <kbd>C</kbd></div>
         <div class="help-row"><span>Cursor stamp / crop</span><kbd>P</kbd> <kbd>R</kbd></div>
         <div class="help-row"><span>Undo / redo</span><kbd>Ctrl Z</kbd> <kbd>Ctrl Y</kbd></div>
+        <h4>Editing a mark</h4>
+        <div class="help-row"><span>Pick the pointer, then click a mark</span><kbd>V</kbd></div>
+        <div class="help-row"><span>Drag it to move, drag a handle to resize</span></div>
+        <div class="help-row"><span>Recolour or resize it from the rows below</span></div>
+        <div class="help-row"><span>Re-edit a text label</span><kbd>Double-click</kbd></div>
+        <div class="help-row"><span>Delete the selected mark</span><kbd>Del</kbd></div>
+        <h4>View</h4>
+        <div class="help-row"><span>Zoom in / out</span><kbd>Ctrl +</kbd> <kbd>Ctrl −</kbd></div>
+        <div class="help-row"><span>Zoom about the cursor</span><kbd>Ctrl Wheel</kbd></div>
+        <div class="help-row"><span>Fit to window</span><kbd>Ctrl 0</kbd></div>
+        <div class="help-row"><span>Pan</span><kbd>Wheel</kbd> <kbd>Middle-drag</kbd></div>
+        <h4>Crop</h4>
+        <div class="help-row"><span>Drag a side, corner, or inside to move</span></div>
+        <div class="help-row"><span>Apply the crop</span><kbd>Enter</kbd></div>
+        <div class="help-row"><span>Start the rect over / leave the tool</span><kbd>Esc</kbd></div>
         <h4>Image</h4>
         <div class="help-row"><span>Save</span><kbd>Ctrl S</kbd></div>
         <div class="help-row"><span>Copy to clipboard</span><kbd>Ctrl C</kbd></div>
@@ -1131,6 +1217,9 @@
     <!-- Hidden source video, used when the source is a clip -->
     <video id="srcVideo" style="position: fixed; left: -9999px; width: 1px; height: 1px;" playsinline></video>
 
+    <!-- Container writers for the WebCodecs export path. See studio/vendor/README.md -->
+    <script src="studio/vendor/mp4-muxer.js"></script>
+    <script src="studio/vendor/webm-muxer.js"></script>
     <script src="studio/presets.js"></script>
     <script src="studio/state.js"></script>
     <script src="studio/scene.js"></script>

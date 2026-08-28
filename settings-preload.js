@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("qgnSettings", {
   setImageQuality: (value) => ipcRenderer.send("set-image-quality", value),
   setDismissSeconds: (value) => ipcRenderer.send("set-dismiss-seconds", value),
   setRecordCountdown: (value) => ipcRenderer.send("set-record-countdown", value),
+  setConfirmSelection: (value) => ipcRenderer.send("set-confirm-selection", value),
+  setKeepHistory: (value) => ipcRenderer.send("set-keep-history", value),
   setHotkey: (action, accelerator) => ipcRenderer.send("set-hotkey", { action, accelerator }),
   resetHotkeys: () => ipcRenderer.send("reset-hotkeys"),
   resize: (height) => ipcRenderer.send("settings-resize", height),

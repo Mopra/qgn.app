@@ -232,10 +232,6 @@ function paintScene(ctx, L) {
     ctx.stroke();
     ctx.restore();
   }
-
-  // The live crop marquee is transient UI, drawn outside the frame clip so the
-  // dimming can cover the padding too. It never reaches an export.
-  drawCropOverlay(ctx, L);
 }
 
 function renderSceneScaled(ctx, sx, sy, L) {

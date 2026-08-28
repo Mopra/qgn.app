@@ -46,6 +46,8 @@ const BOUNDS_DEBOUNCE_MS = 200;
 // found the app useful (i.e. after this many completed captures).
 const STAR_PROMPT_CAPTURE_THRESHOLD = 10;
 const REPO_URL = "https://github.com/Mopra/qgn.app";
+// How long a download may sit at the same percentage before it counts as dead.
+const UPDATE_STALL_CHECK_MS = 60000;
 
 // Shared webPreferences for secure BrowserWindows
 const secureWebPrefs = (preloadFile, opts = {}) => ({
@@ -125,6 +127,12 @@ function getCopyFormat() {
 function getImageQuality() {
   const q = loadSettings().imageQuality;
   return Number.isFinite(q) && q >= 1 && q <= 100 ? q : 90;
+}
+
+// Whether releasing the mouse settles the selection for adjustment (default)
+// or captures straight away, the way it did before the overlay grew handles.
+function getConfirmSelection() {
+  return loadSettings().confirmSelection !== false; // default true
 }
 
 // Seconds before an unpinned preview auto-dismisses. 0 = never. Default 10.
@@ -244,6 +252,9 @@ let tray = null;
 let settingsWindow = null;
 let overlayReady = false;
 let overlayActive = false;
+// The display the overlay currently covers. Snap rects and loupe crops are both
+// resolved against it.
+let overlayDisplay = null;
 // Cursor-free capture of the active display, taken when the screenshot overlay
 // activates so it's ready by the time the user finishes selecting a region.
 let pendingScreenshot = null;
@@ -263,6 +274,8 @@ let welcomeWindow = null;
 let starWindow = null;
 let pinnedDataDir;
 let pinnedManifestPath;
+let historyDataDir;
+let historyManifestPath;
 let isQuitting = false;
 // Temp PNGs materialized for drag-out when save-to-disk is off. Removed on
 // quit so they don't pile up in the user's temp folder forever.
@@ -481,6 +494,7 @@ function showOverlay() {
 
   const cursorPoint = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursorPoint);
+  overlayDisplay = display;
 
   // Exclude the overlay (and its dimming UI) from screen capture so it can
   // never bleed into the screenshot, then grab a cursor-free frame of the
@@ -495,6 +509,7 @@ function showOverlay() {
   overlayWindow.setIgnoreMouseEvents(false);
   overlayWindow.webContents.send("activate-capture", {
     displayId: String(display.id),
+    confirmSelection: getConfirmSelection(),
   });
   overlayWindow.focus();
 }
@@ -532,6 +547,328 @@ function hideOverlay() {
   overlayWindow.blur();
 }
 
+/* ── Capture history ──
+   A preview card auto-dismisses after ten seconds, and with save-to-disk off
+   the capture then only existed on the clipboard: one Ctrl+C away from gone.
+   Every capture is therefore also written to a small ring in userData, and the
+   tray can put any of them back on screen as a preview card.
+
+   Stills keep a full-resolution PNG copy, because the point of getting one back
+   is to copy it again at full quality. Clips only keep their thumbnail and a
+   path: copying a video file into the ring would be gigabytes. */
+const HISTORY_LIMIT = 12;
+const HISTORY_MAX_BYTES = 250 * 1024 * 1024;
+
+function getKeepHistory() {
+  return loadSettings().keepHistory !== false; // default true
+}
+
+function loadHistoryManifest() {
+  try {
+    const list = JSON.parse(fs.readFileSync(historyManifestPath, "utf-8"));
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+// Atomic, for the same reason the pinned manifest is: a truncated file reads
+// back as "no history" and silently drops the lot.
+function saveHistoryManifest(list) {
+  const tmp = historyManifestPath + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(list, null, 2));
+  fs.renameSync(tmp, historyManifestPath);
+}
+
+/* Drop entries past the count or byte budget, and any whose image has gone
+   missing, then delete the files they owned.
+
+   Passing a list means "this is the new state": it is always written back, even
+   when nothing was pruned, because the caller has just added an entry. Called
+   with no list it is only tidying, so it writes only when something changed. */
+function pruneHistory(list) {
+  const manifest = list || loadHistoryManifest();
+  const kept = [];
+  let bytes = 0;
+  const dropped = [];
+
+  for (const item of manifest) {
+    if (!item || typeof item.imagePath !== "string") continue;
+    let size = 0;
+    try {
+      size = fs.statSync(item.imagePath).size;
+    } catch {
+      continue; // image gone: the entry cannot be restored, so let it go
+    }
+    if (kept.length >= HISTORY_LIMIT || bytes + size > HISTORY_MAX_BYTES) {
+      dropped.push(item);
+      continue;
+    }
+    kept.push(item);
+    bytes += size;
+  }
+
+  for (const item of dropped) {
+    try { fs.unlinkSync(item.imagePath); } catch {}
+  }
+  if (list || kept.length !== manifest.length) {
+    try { saveHistoryManifest(kept); } catch (e) { console.error("Failed to write history:", e); }
+  }
+  return kept;
+}
+
+function recordHistory(pngBuffer, imgSize, filePath, isVideo) {
+  if (!getKeepHistory()) return;
+  try {
+    fs.mkdirSync(historyDataDir, { recursive: true });
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const imagePath = path.join(historyDataDir, `${id}.png`);
+    const image = nativeImage.createFromBuffer(Buffer.from(pngBuffer));
+    if (image.isEmpty()) return;
+    fs.writeFileSync(imagePath, image.toPNG());
+
+    // Newest first, so the tray reads top-down without reversing.
+    const manifest = loadHistoryManifest();
+    manifest.unshift({
+      imagePath,
+      filePath: filePath || null,
+      imgSize: imgSize || image.getSize(),
+      isVideo: !!isVideo,
+      ts: Date.now(),
+    });
+    pruneHistory(manifest);
+    rebuildTrayMenu();
+  } catch (e) {
+    console.error("Failed to record capture history:", e);
+  }
+}
+
+function clearHistory() {
+  for (const item of loadHistoryManifest()) {
+    try { fs.unlinkSync(item.imagePath); } catch {}
+  }
+  try { saveHistoryManifest([]); } catch (e) { console.error("Failed to clear history:", e); }
+  rebuildTrayMenu();
+}
+
+// Put a stored capture back on screen as an ordinary preview card, with all the
+// actions a fresh one has.
+function restoreHistoryItem(item) {
+  try {
+    const buf = fs.readFileSync(item.imagePath);
+    const image = nativeImage.createFromBuffer(buf);
+    if (image.isEmpty()) {
+      showErrorToast("That capture could not be re-opened");
+      return;
+    }
+    // The original file may have been moved or deleted since; only offer it as
+    // the card's file when it is still there.
+    const stillThere = item.filePath && fs.existsSync(item.filePath) ? item.filePath : null;
+    showPreview(new Uint8Array(buf), item.imgSize || image.getSize(), stillThere, !!item.isVideo);
+  } catch (e) {
+    console.error("Failed to restore capture:", e);
+    showErrorToast("That capture could not be re-opened");
+  }
+}
+
+function historyLabel(item) {
+  const size = item.imgSize
+    ? `${item.imgSize.width}×${item.imgSize.height}`
+    : "capture";
+  const mins = Math.round((Date.now() - (item.ts || 0)) / 60000);
+  let when;
+  if (!item.ts) when = "";
+  else if (mins < 1) when = "just now";
+  else if (mins < 60) when = `${mins} min ago`;
+  else if (mins < 60 * 24) when = `${Math.round(mins / 60)} h ago`;
+  else when = `${Math.round(mins / (60 * 24))} d ago`;
+  return `${item.isVideo ? "Clip" : "Shot"} ${size}${when ? "  ·  " + when : ""}`;
+}
+
+/* ── Snap-to-window ──
+   Windows gives Electron no way to read other applications' window bounds, so a
+   small PowerShell helper does it. It is spawned once, lazily, on the first
+   capture that needs it and answers later requests in a couple of milliseconds;
+   compiling its P/Invoke shim is the slow part and only happens at startup.
+   Every failure path ends in an empty list, which the overlay treats as "no
+   snapping" rather than as an error. */
+let snapHelper = null;
+let snapHelperReady = null;
+let snapHelperFailures = 0;
+const SNAP_HELPER_MAX_FAILURES = 2;
+const SNAP_REQUEST_TIMEOUT_MS = 2000;
+// Compiling the helper's P/Invoke shim takes about a second on a cold start.
+// Past this it is not coming, and waiting on it would hang the caller forever.
+const SNAP_HELPER_START_TIMEOUT_MS = 8000;
+
+function snapHelperScript() {
+  // PowerShell is not Electron-aware, so it cannot read a path inside
+  // app.asar. The script is unpacked at build time; point at the real file.
+  return path
+    .join(__dirname, "lib", "window-rects.ps1")
+    .replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
+}
+
+function startSnapHelper() {
+  if (snapHelperReady) return snapHelperReady;
+  if (snapHelperFailures >= SNAP_HELPER_MAX_FAILURES) return Promise.resolve(null);
+
+  snapHelperReady = new Promise((resolve) => {
+    let child;
+    try {
+      child = require("child_process").spawn(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+         "-File", snapHelperScript(), "-ExcludePid", String(process.pid)],
+        { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] }
+      );
+    } catch (e) {
+      snapHelperFailures = SNAP_HELPER_MAX_FAILURES;
+      resolve(null);
+      return;
+    }
+
+    let buf = "";
+    let settled = false;
+    const ready = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(startTimer);
+      resolve(value);
+    };
+
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      buf += chunk;
+      let i;
+      while ((i = buf.indexOf("\n")) !== -1) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if (!settled) {
+          if (line === "READY") ready(child);
+          continue;
+        }
+        const pending = snapHelper && snapHelper.pending.shift();
+        if (pending) pending(line);
+      }
+    });
+
+    const die = () => {
+      snapHelper = null;
+      snapHelperReady = null;
+      snapHelperFailures++;
+      ready(null);
+    };
+    child.on("error", die);
+    child.on("exit", die);
+
+    // A helper that never announces itself is a dead end, not a slow start.
+    const startTimer = setTimeout(() => {
+      if (settled) return;
+      snapHelperFailures++;
+      try { child.kill(); } catch {}
+      snapHelper = null;
+      snapHelperReady = null;
+      ready(null);
+    }, SNAP_HELPER_START_TIMEOUT_MS);
+
+    snapHelper = { child, pending: [] };
+  });
+
+  return snapHelperReady;
+}
+
+function stopSnapHelper() {
+  if (snapHelper && snapHelper.child) {
+    try { snapHelper.child.kill(); } catch {}
+  }
+  snapHelper = null;
+  snapHelperReady = null;
+}
+
+/* One line of "x,y,w,h;..." in physical screen pixels, or null.
+
+   Exactly one request is ever in flight. A line protocol has no request ids, so
+   a reply that arrives after its own request timed out would otherwise be
+   handed to the next caller, which is worse than no snapping: the overlay would
+   quietly snap to where the windows used to be. Callers that arrive while a
+   request is outstanding share its result, and a timeout tears the helper down
+   rather than leaving a reply in flight with nothing to match it to. */
+let snapRequest = null;
+
+function requestWindowRectLine() {
+  if (snapRequest) return snapRequest;
+
+  const run = startSnapHelper().then((child) => {
+    if (!child || !snapHelper) return null;
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (line) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(line);
+      };
+      const timer = setTimeout(() => {
+        // A helper this late is not trustworthy any more. Dropping it means the
+        // next request starts a fresh process with an empty queue.
+        stopSnapHelper();
+        snapHelperFailures++;
+        finish(null);
+      }, SNAP_REQUEST_TIMEOUT_MS);
+      snapHelper.pending.push(finish);
+      try {
+        snapHelper.child.stdin.write("\n");
+      } catch (e) {
+        finish(null);
+      }
+    });
+  }).catch(() => null);
+
+  // Clear the slot however it ends, so the next activation asks again.
+  snapRequest = run.finally(() => { snapRequest = null; });
+  return snapRequest;
+}
+
+// Physical-pixel rects from the helper, converted to CSS pixels relative to the
+// display the overlay covers, and filtered to the ones actually on it.
+async function getSnapWindowRects() {
+  if (process.platform !== "win32") return [];
+  const display = overlayDisplay;
+  if (!display) return [];
+
+  const line = await requestWindowRectLine();
+  if (!line) return [];
+
+  const sf = display.scaleFactor || 1;
+  const originX = Math.round(display.bounds.x * sf);
+  const originY = Math.round(display.bounds.y * sf);
+  const vw = display.bounds.width;
+  const vh = display.bounds.height;
+
+  const out = [];
+  for (const part of line.split(";")) {
+    if (!part) continue;
+    const n = part.split(",").map(Number);
+    if (n.length !== 4 || !n.every(Number.isFinite)) continue;
+    const x = (n[0] - originX) / sf;
+    const y = (n[1] - originY) / sf;
+    const w = n[2] / sf;
+    const h = n[3] / sf;
+    // Keep only what is actually visible on this display, clipped to it.
+    const x1 = Math.max(0, x), y1 = Math.max(0, y);
+    const x2 = Math.min(vw, x + w), y2 = Math.min(vh, y + h);
+    if (x2 - x1 < 20 || y2 - y1 < 20) continue;
+    out.push({
+      x: Math.round(x1),
+      y: Math.round(y1),
+      w: Math.round(x2 - x1),
+      h: Math.round(y2 - y1),
+    });
+  }
+  return out;
+}
+
 async function handleCaptureData(pngBuffer) {
   const image = nativeImage.createFromBuffer(Buffer.from(pngBuffer));
   copyToClipboard(image);
@@ -541,6 +878,7 @@ async function handleCaptureData(pngBuffer) {
     if (!savedPath) showErrorToast("Couldn't save to disk — copied to clipboard only");
   }
   showPreview(pngBuffer, image.getSize(), savedPath);
+  recordHistory(pngBuffer, image.getSize(), savedPath, false);
   recordCaptureForStarPrompt();
 }
 
@@ -1216,6 +1554,7 @@ async function showOverlayForVideo() {
 
   const cursorPoint = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursorPoint);
+  overlayDisplay = display;
   videoScaleFactor = display.scaleFactor;
   // Physical pixel dimensions of the display, so the recorder can request a
   // full-resolution (1:1) capture instead of Chromium's downscaled default.
@@ -1250,7 +1589,9 @@ async function showOverlayForVideo() {
   const { x, y, width, height } = display.bounds;
   overlayWindow.setBounds({ x, y, width, height });
   overlayWindow.setIgnoreMouseEvents(false);
-  overlayWindow.webContents.send("overlay-reset-video");
+  overlayWindow.webContents.send("overlay-reset-video", {
+    confirmSelection: getConfirmSelection(),
+  });
   overlayWindow.focus();
 
   // Show control bar in setup mode (audio toggles only) alongside the overlay
@@ -1437,6 +1778,7 @@ function writeVideoFile(buffer, ext, thumbnailDataUrl) {
     const pngBuffer = Buffer.from(base64, "base64");
     const image = nativeImage.createFromBuffer(pngBuffer);
     showPreview(new Uint8Array(pngBuffer), image.getSize(), filePath, true);
+    recordHistory(new Uint8Array(pngBuffer), image.getSize(), filePath, true);
   } else {
     showToast("saved");
   }
@@ -1473,11 +1815,32 @@ async function chooseSaveFolder() {
 }
 
 function rebuildTrayMenu() {
+  if (!tray || tray.isDestroyed()) return;
   const hk = getHotkeys();
+
+  // Recent captures: clicking one puts its preview card back on screen, which
+  // is where copy, drag-out, annotate and Studio already live. Pruning here
+  // (rather than only at startup) keeps an entry whose file has since been
+  // deleted from appearing as a menu item that cannot do anything.
+  const history = getKeepHistory() ? pruneHistory() : [];
+  const recentItems = history.map((item) => ({
+    label: historyLabel(item),
+    click: () => restoreHistoryItem(item),
+  }));
+  if (recentItems.length) {
+    recentItems.push({ type: "separator" });
+    recentItems.push({ label: "Clear recent captures", click: clearHistory });
+  } else {
+    recentItems.push({ label: "No recent captures", enabled: false });
+  }
+
   const contextMenu = Menu.buildFromTemplate([
     { label: `Capture (${hotkeyToLabel(hk.capture)})`, click: showOverlay },
     { label: `Record (${hotkeyToLabel(hk.record)})`, click: showOverlayForVideo },
     { label: "Capture full screen", click: captureFullScreen },
+    { type: "separator" },
+    { label: "Recent captures", submenu: recentItems },
+    { type: "separator" },
     { label: "Open Studio", click: () => openStudio() },
     { label: "Annotate clipboard image", click: () => studioClipboard("markup") },
     { label: "Open clipboard image in Studio", click: () => studioClipboard("compose") },
@@ -1609,6 +1972,38 @@ function setupAutoUpdater() {
   // handling the race where download-progress fires before did-finish-load.
   let pendingStatus = null;
   let downloadStallTimer = null;
+  let lastStallCheckPercent = -1;
+
+  // A download is "stalled" when the percentage has not moved for a whole
+  // check window. Watching movement rather than only the first percent is what
+  // catches a transfer that dies at 40%, which used to hang the card forever.
+  function startDownloadStallWatch() {
+    stopDownloadStallWatch();
+    lastStallCheckPercent = -1;
+    downloadStallTimer = setInterval(() => {
+      if (!pendingStatus || pendingStatus.status !== "downloading") {
+        stopDownloadStallWatch();
+        return;
+      }
+      const pct = pendingStatus.percent || 0;
+      if (pct > lastStallCheckPercent) {
+        lastStallCheckPercent = pct;
+        return;
+      }
+      stopDownloadStallWatch();
+      sendUpdateStatus({
+        status: "error",
+        message: "Download stalled. Check your connection and try again.",
+      });
+    }, UPDATE_STALL_CHECK_MS);
+  }
+
+  function stopDownloadStallWatch() {
+    if (downloadStallTimer) {
+      clearInterval(downloadStallTimer);
+      downloadStallTimer = null;
+    }
+  }
 
   function sendUpdateStatus(data) {
     pendingStatus = data;
@@ -1625,23 +2020,15 @@ function setupAutoUpdater() {
 
   getAutoUpdater().on("update-available", (info) => {
     // A repeated check must not leave the previous watchdog running, or it
-    // would fire a bogus "timed out" over a healthy download.
-    if (downloadStallTimer) {
-      clearTimeout(downloadStallTimer);
-      downloadStallTimer = null;
-    }
+    // would fire a bogus "stalled" over a healthy download.
+    stopDownloadStallWatch();
     pendingUpdateVersion = validVersion(info && info.version);
     pendingStatus = { status: "downloading", percent: 0, version: pendingUpdateVersion };
     showUpdateToast();
     if (updateWindow && !updateWindow.isDestroyed()) {
       updateWindow.webContents.once("did-finish-load", onUpdateWindowReady);
     }
-    // Show an error if the download hasn't progressed within 60 seconds
-    downloadStallTimer = setTimeout(() => {
-      if (pendingStatus && pendingStatus.status === "downloading" && pendingStatus.percent < 1) {
-        sendUpdateStatus({ status: "error", message: "Download timed out. Check your connection and try again." });
-      }
-    }, 60000);
+    startDownloadStallWatch();
   });
 
   getAutoUpdater().on("download-progress", (progress) => {
@@ -1649,10 +2036,7 @@ function setupAutoUpdater() {
   });
 
   getAutoUpdater().on("update-downloaded", (info) => {
-    if (downloadStallTimer) {
-      clearTimeout(downloadStallTimer);
-      downloadStallTimer = null;
-    }
+    stopDownloadStallWatch();
     pendingUpdateVersion = validVersion(info && info.version) || pendingUpdateVersion;
     if (updateWindow && !updateWindow.isDestroyed()) {
       sendUpdateStatus({ status: "ready", version: pendingUpdateVersion });
@@ -1667,10 +2051,7 @@ function setupAutoUpdater() {
 
   getAutoUpdater().on("error", (err) => {
     console.error("Auto-update error:", err);
-    if (downloadStallTimer) {
-      clearTimeout(downloadStallTimer);
-      downloadStallTimer = null;
-    }
+    stopDownloadStallWatch();
     sendUpdateStatus({ status: "error", message: err?.message || "Update failed" });
   });
 
@@ -1740,6 +2121,9 @@ app.whenReady().then(() => {
 
   pinnedDataDir = path.join(app.getPath("userData"), "pinned");
   pinnedManifestPath = path.join(app.getPath("userData"), "pinned-previews.json");
+  historyDataDir = path.join(app.getPath("userData"), "history");
+  historyManifestPath = path.join(app.getPath("userData"), "history.json");
+  pruneHistory();
 
   createOverlay();
   createTray();
@@ -1810,6 +2194,60 @@ app.whenReady().then(() => {
   ipcMain.on("star-dismiss", () => {
     closeStarPrompt();
   });
+
+  // A magnified crop around the cursor for the overlay's pixel loupe. The
+  // captured frame never leaves the main process; only a ~21px square does.
+  ipcMain.handle("overlay-magnify", async (_event, req) => {
+    const pending = pendingScreenshot;
+    if (!pending || !req) return null;
+    const nums = [req.x, req.y, req.viewportWidth, req.viewportHeight, req.radius];
+    if (!nums.every((n) => Number.isFinite(n))) return null;
+    if (req.viewportWidth <= 0 || req.viewportHeight <= 0) return null;
+
+    let image;
+    try {
+      image = await pending;
+    } catch {
+      return null;
+    }
+    if (!image || image.isEmpty()) return null;
+
+    const size = image.getSize();
+    const scaleX = size.width / req.viewportWidth;
+    const scaleY = size.height / req.viewportHeight;
+    const cx = Math.round(req.x * scaleX);
+    const cy = Math.round(req.y * scaleY);
+    if (cx < 0 || cy < 0 || cx >= size.width || cy >= size.height) return null;
+
+    const half = Math.max(2, Math.min(80, Math.round(req.radius)));
+    const x = Math.max(0, Math.min(cx - half, Math.max(0, size.width - 1)));
+    const y = Math.max(0, Math.min(cy - half, Math.max(0, size.height - 1)));
+    const w = Math.min(half * 2 + 1, size.width - x);
+    const h = Math.min(half * 2 + 1, size.height - y);
+    if (w < 1 || h < 1) return null;
+
+    try {
+      const crop = image.crop({ x, y, width: w, height: h });
+      // toBitmap is BGRA on Windows, so the channels come back reversed.
+      let hex = null;
+      const px = image.crop({ x: cx, y: cy, width: 1, height: 1 }).toBitmap();
+      if (px && px.length >= 3) {
+        hex = "#" + [px[2], px[1], px[0]]
+          .map((v) => v.toString(16).padStart(2, "0"))
+          .join("")
+          .toUpperCase();
+      }
+      return { dataUrl: crop.toDataURL(), cx: cx - x, cy: cy - y, w, h, hex };
+    } catch (e) {
+      return null;
+    }
+  });
+
+  // Window rectangles for snap-to-window, in CSS pixels relative to the display
+  // the overlay is on. Windows has no Electron API for other apps' bounds, so
+  // this is empty until a platform helper can supply them; the overlay treats an
+  // empty list as "no snapping" rather than as a failure.
+  ipcMain.handle("overlay-window-rects", () => getSnapWindowRects());
 
   ipcMain.on("capture-region", async (_event, region) => {
     // Validate the selection coming from the renderer.
@@ -2045,11 +2483,12 @@ app.whenReady().then(() => {
     const studio = studioWindows.get(win);
     const src = studio ? studio.previewEntry : null;
 
-    if (src && src.fromClipboard) {
-      // Annotating a clipboard image: treat the result as a fresh capture
-      // (save to disk if enabled, show a preview card).
-      handleCaptureData(Buffer.from(pngBuffer));
-    } else if (src) {
+    // Nothing to write back over: a clipboard image, an imported file, or a
+    // Studio opened empty from the tray. Land the edit as a fresh capture
+    // rather than closing the window and throwing the work away.
+    if (!src || src.fromClipboard) {
+      await handleCaptureData(Buffer.from(pngBuffer));
+    } else {
       try {
         if (src.filePath && !src.isVideo) {
           // Re-encode to match the file's real format instead of writing PNG
@@ -2184,6 +2623,8 @@ app.whenReady().then(() => {
       imageQuality: getImageQuality(),
       dismissSeconds: getDismissSeconds(),
       recordCountdown: getRecordCountdown(),
+      confirmSelection: getConfirmSelection(),
+      keepHistory: getKeepHistory(),
     };
   }
 
@@ -2266,6 +2707,20 @@ app.whenReady().then(() => {
     sendSettingsUpdate();
   });
 
+  ipcMain.on("set-confirm-selection", (_event, value) => {
+    saveSetting("confirmSelection", !!value);
+    sendSettingsUpdate();
+  });
+
+  ipcMain.on("set-keep-history", (_event, value) => {
+    const keep = !!value;
+    saveSetting("keepHistory", keep);
+    // Switching it off is also a request to forget what is already stored.
+    if (!keep) clearHistory();
+    else rebuildTrayMenu();
+    sendSettingsUpdate();
+  });
+
   ipcMain.on("set-dismiss-seconds", (_event, value) => {
     const v = Number(value);
     if (!Number.isFinite(v) || v < 0 || v > 600) return;
@@ -2302,6 +2757,22 @@ app.whenReady().then(() => {
 
   ipcMain.on("recording-error", (_event, message) => {
     showErrorToast(typeof message === "string" && message ? message : "Recording failed");
+  });
+
+  // The control bar asks for room when it has to show a warning badge. Grow
+  // around the current center so the bar doesn't appear to jump sideways.
+  ipcMain.on("record-bar-width", (_event, width) => {
+    if (!recordingControlWindow || recordingControlWindow.isDestroyed()) return;
+    const target = Math.round(Number(width));
+    if (!Number.isFinite(target) || target < 200 || target > 900) return;
+    const b = recordingControlWindow.getBounds();
+    if (target <= b.width) return;
+    recordingControlWindow.setBounds({
+      x: b.x - Math.round((target - b.width) / 2),
+      y: b.y,
+      width: target,
+      height: b.height,
+    });
   });
 
   ipcMain.on("choose-save-folder", async () => {
@@ -2365,6 +2836,7 @@ app.on("before-quit", () => {
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  stopSnapHelper();
   for (const f of dragTempFiles) {
     try { fs.unlinkSync(f); } catch {}
   }

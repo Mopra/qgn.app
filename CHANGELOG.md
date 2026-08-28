@@ -3,6 +3,92 @@
 The top section is what ships in the next release. CI publishes it as the
 release notes on GitHub, and the in-app update card links straight to it.
 
+## 0.1.17
+
+**Redaction can no longer be undone by stacking marks**
+
+A pixelate block drawn over a solid one re-sampled the original image rather
+than what was already painted, which put the hidden content back on screen in
+pixelated but often still readable form. Pixelation now samples what is
+underneath it, so redactions stack the way you would expect. If you have
+shared a screenshot whose sensitive area was pixelated over a black block, it
+is worth checking.
+
+**Three more things that failed quietly**
+
+- A recording whose microphone or system audio would not open no longer records
+  in silence and tells you nothing. The control bar carries a warning badge for
+  the whole take and a toast fires once, while the recording can still be redone.
+- Saving in Markup mode with nothing to write back over (an imported file, or
+  a Studio opened empty from the tray) used to copy to the clipboard and close
+  the window without writing anything. It now lands as a new capture.
+- Dismissing a failed update could still trigger the install it had just failed
+  to download. A download that dies partway now reports it too, instead of only
+  one that never starts.
+
+**The capture overlay**
+
+- Releasing the mouse settles the selection instead of taking it. Drag the
+  edges and corners, drag inside to move it, nudge it with the arrow keys, then
+  confirm with <kbd>Enter</kbd>, a double-click, or the Capture button.
+  <kbd>Esc</kbd> drops the selection before it cancels the overlay. Switch it
+  back to capturing on release in Settings.
+- Click a window to capture exactly that window. Hovering shows what you would
+  get, and edges snap to nearby windows while you drag (hold <kbd>Alt</kbd> to
+  ignore them).
+- A pixel loupe follows the cursor with a live coordinate and colour readout,
+  for when the edge you want is one pixel wide.
+- <kbd>Shift</kbd> constrains to a square, and <kbd>Space</kbd> now grabs the
+  whole screen when recording, not only when capturing.
+
+**Recent captures**
+
+Every capture is kept in a small ring, so a preview card that timed out is no
+longer gone. The tray has a Recent captures menu that puts any of the last
+twelve back on screen as an ordinary card. It can be switched off in Settings,
+which also forgets what is already stored.
+
+**Studio: marks are editable after you place them**
+
+Pick the pointer (<kbd>V</kbd>) and click a mark to select it. Drag it to move,
+drag a handle to resize or scale it, recolour it from the row below, and delete
+it with <kbd>Del</kbd>. Double-click a text label to fix a typo. Fixing one mark
+no longer means undoing everything drawn after it.
+
+**Studio: zoom and pan**
+
+The preview was locked to fit-to-window, which on a 4K capture put two or three
+source pixels behind every screen pixel. <kbd>Ctrl</kbd> + wheel zooms about the
+cursor, the wheel pans, middle-drag pans, and <kbd>Ctrl 0</kbd> fits again.
+
+**Clips render faster than real time**
+
+MP4 and WebM exports went through a recorder that ran at playback speed: a
+three-minute clip took three minutes. They now drive the encoder directly and
+finish several times faster, with the same trim, zoom keyframes, cursor and
+annotations. The old path is still there as a fallback.
+
+**Crop is adjustable now**
+
+Cropping used to be a one-shot marquee: whatever rectangle you dragged was
+applied the moment you let go, so getting the framing right meant undoing and
+trying again.
+
+Picking the crop tool (R) now puts a rect over the whole image straight away,
+and nothing is cut until you say so:
+
+- Drag any side or corner to resize it, or drag inside it to move it. Start a
+  drag outside it to draw a fresh one.
+- A live pixel readout in the tool rail shows the size as you drag, next to an
+  Apply button.
+- Apply with the button, <kbd>Enter</kbd>, or a double-click on the rect.
+  <kbd>Esc</kbd> puts the rect back to full size; a second <kbd>Esc</kbd>
+  leaves the tool.
+- Thirds guides and a dimmed surround show what you are keeping.
+
+After a crop the rect re-arms over what's left, so trimming twice is just two
+drags. Same tool in both Markup and Compose, on stills and clips.
+
 ## 0.1.16
 
 **Studio: one editor for screenshots and recordings**

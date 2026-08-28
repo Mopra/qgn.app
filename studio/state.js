@@ -36,6 +36,9 @@ const state = {
   redactStyle: "solid", // solid | pixelate
   strokes: [],
   calloutCounter: 1,
+  // Id of the stroke the pointer tool has selected, or null. Ids are stable
+  // across edits and undo; array positions are not.
+  selectedStrokeId: null,
 
   // ── Video only ──
   format: "mp4",
@@ -134,6 +137,11 @@ function restore(snap) {
   state.crop = snap.crop ? { ...snap.crop } : null;
   // Callout numbering follows whatever callouts survive the restore.
   state.calloutCounter = state.strokes.reduce((n, s) => (s.type === "callout" ? n + 1 : n), 0) + 1;
+  // An undo can take the selected stroke away with it.
+  if (state.selectedStrokeId != null &&
+      !state.strokes.some((s) => s.id === state.selectedStrokeId)) {
+    state.selectedStrokeId = null;
+  }
 }
 
 // Call immediately BEFORE mutating strokes/crop.

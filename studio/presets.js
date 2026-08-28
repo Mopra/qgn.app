@@ -69,8 +69,8 @@ const ANNOTATION_COLORS = ["#ff3b30", "#ff9500", "#ffcc00", "#34c759", "#007aff"
 
 /* ───────────────────────── Video export ───────────────────────── */
 const FORMAT_HINTS = {
-  mp4: "MP4: best for sharing. Keeps audio. Rendered in real time.",
-  webm: "WebM: open format, smaller files. Keeps audio. Rendered in real time.",
+  mp4: "MP4: best for sharing. Keeps audio.",
+  webm: "WebM: open format, smaller files. Keeps audio.",
   gif: "GIF: looping, no audio. Capped to 800px / 15fps; long clips are sampled sparser.",
   webp: "Animated WebP: looping, no audio. Smaller and sharper than GIF.",
 };

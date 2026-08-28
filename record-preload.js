@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld("qgnRecord", {
   },
   saveRecording: (buffer, thumbnail, format) => ipcRenderer.send("save-recording", buffer, thumbnail, format),
   reportError: (message) => ipcRenderer.send("recording-error", message),
+  // The bar grows when it has to carry a warning badge.
+  requestWidth: (width) => ipcRenderer.send("record-bar-width", width),
   cancel: () => ipcRenderer.send("cancel"),
   // Motion-capture clock sync: align main's event timestamps to the video clock.
   motionStarted: (startTime) => ipcRenderer.send("recording-started", startTime),

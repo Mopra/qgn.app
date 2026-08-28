@@ -422,6 +422,7 @@ function exportEncoded(format) {
         showExportError("The render produced no video. Try WebM, or a shorter trim.");
         return;
       }
+      lastExportPath = "realtime";
       window.studio.exportEncoded(bytes, thumb, ext);
     });
   };
@@ -502,12 +503,259 @@ function exportAnimated(format) {
   step();
 }
 
+/* ── Fast encoded export (mp4 / webm) ──────────────────────────────────────
+   The MediaRecorder path below encodes a canvas capture stream, which by
+   definition runs in real time: a three-minute clip took three minutes. This
+   path drives the encoder directly instead. Frames are stepped by seeking, the
+   way the GIF exporter already does, handed to a WebCodecs VideoEncoder, and
+   written into a container by a vendored muxer. Audio is decoded once, sliced
+   to the trim, and encoded alongside.
+
+   Nothing here is required: if WebCodecs will not take the configuration, or
+   anything throws, the export falls back to the real-time recorder. */
+// Which encoder path last produced a clip: "fast" (WebCodecs) or "realtime"
+// (MediaRecorder). Read by the smoke test, which needs to know the fast path
+// actually ran rather than inferring it from how long the render took.
+let lastExportPath = null;
+
+const FAST_EXPORT_FPS = 30;
+// How many frames may sit in the encoder's queue before the frame loop waits.
+// Keeps peak memory bounded on a long clip without starving the encoder.
+const ENCODER_QUEUE_LIMIT = 8;
+const AUDIO_FRAME_SAMPLES = 1024;
+
+function fastExportSupported() {
+  return typeof VideoEncoder !== "undefined" &&
+         typeof VideoFrame !== "undefined" &&
+         typeof AudioEncoder !== "undefined" &&
+         typeof AudioData !== "undefined" &&
+         typeof Mp4Muxer !== "undefined" &&
+         typeof WebMMuxer !== "undefined";
+}
+
+// Codec strings for each container. AVC high profile matches what the
+// real-time path asked MediaRecorder for.
+function fastVideoCodec(format) {
+  return format === "webm" ? "vp09.00.10.08" : "avc1.640028";
+}
+
+function waitForQueue(encoder) {
+  if (encoder.encodeQueueSize < ENCODER_QUEUE_LIMIT) return Promise.resolve();
+  return new Promise((resolve) => {
+    const tick = () => {
+      if (encoder.encodeQueueSize < ENCODER_QUEUE_LIMIT) resolve();
+      else setTimeout(tick, 4);
+    };
+    tick();
+  });
+}
+
+/* Decode the clip's audio once and hand back only the trimmed span, already
+   resampled to the rate the encoder will use. Returns null when the clip has no
+   audio, when it is muted, or when decoding fails, all of which just mean "a
+   video track on its own". */
+async function decodeTrimmedAudio(sampleRate) {
+  if (state.muted || !blobUrl) return null;
+  try {
+    const buf = await (await fetch(blobUrl)).arrayBuffer();
+    const tmpCtx = new AudioContext();
+    let decoded;
+    try {
+      decoded = await tmpCtx.decodeAudioData(buf);
+    } finally {
+      tmpCtx.close();
+    }
+    if (!decoded || decoded.numberOfChannels === 0 || decoded.length === 0) return null;
+
+    const span = Math.max(0.001, state.trimOut - state.trimIn);
+    const channels = Math.min(2, decoded.numberOfChannels);
+    const frames = Math.max(1, Math.round(span * sampleRate));
+    // An OfflineAudioContext does the trim and the resample in one pass.
+    const off = new OfflineAudioContext(channels, frames, sampleRate);
+    const src = off.createBufferSource();
+    src.buffer = decoded;
+    src.connect(off.destination);
+    src.start(0, state.trimIn, span);
+    const rendered = await off.startRendering();
+
+    // Interleave once: AudioData wants a single planar or interleaved buffer.
+    const data = new Float32Array(rendered.length * channels);
+    for (let c = 0; c < channels; c++) {
+      const ch = rendered.getChannelData(c);
+      for (let i = 0; i < rendered.length; i++) data[i * channels + c] = ch[i];
+    }
+    return { data, channels, sampleRate, frames: rendered.length };
+  } catch (e) {
+    console.warn("Audio could not be decoded for export:", e);
+    return null;
+  }
+}
+
+async function exportFast(format) {
+  const { cvs, ctx, w, h, L } = makeExportCanvas(ENCODED_MAX_LONG, true);
+  const sx = w / L.sceneW, sy = h / L.sceneH;
+  const span = Math.max(0.05, state.trimOut - state.trimIn);
+  const total = Math.max(1, Math.round(span * FAST_EXPORT_FPS));
+  const ext = format === "webm" ? "webm" : "mp4";
+  const bitrate = Math.min(50000000, Math.max(8000000, Math.round(w * h * FAST_EXPORT_FPS * 0.15)));
+
+  showProgress("Rendering " + ext.toUpperCase() + "…");
+  video.pause();
+
+  const sampleRate = 48000;
+  const audio = await decodeTrimmedAudio(sampleRate);
+  if (exportAbort) { hideProgress(); return; }
+
+  // Everything that can throw lives inside the try, configuration included: a
+  // codec this machine will not accept has to reach the fallback, not escape as
+  // a rejected promise and strand the progress overlay at 0%.
+  let muxer = null;
+  let videoEncoder = null;
+  let audioEncoder = null;
+  let encodeError = null;
+
+  function cleanup() {
+    try { if (videoEncoder && videoEncoder.state !== "closed") videoEncoder.close(); } catch (_) {}
+    try { if (audioEncoder && audioEncoder.state !== "closed") audioEncoder.close(); } catch (_) {}
+  }
+
+  // Guards the fallback: once the clip has been handed over, a later throw must
+  // not start a second render and land the user with two files and two cards.
+  let delivered = false;
+
+  try {
+    const MuxerNS = format === "webm" ? WebMMuxer : Mp4Muxer;
+    muxer = new MuxerNS.Muxer({
+      target: new MuxerNS.ArrayBufferTarget(),
+      video: {
+        codec: format === "webm" ? "V_VP9" : "avc",
+        width: w,
+        height: h,
+        frameRate: FAST_EXPORT_FPS,
+      },
+      audio: audio
+        ? {
+            codec: format === "webm" ? "A_OPUS" : "aac",
+            numberOfChannels: audio.channels,
+            sampleRate: audio.sampleRate,
+          }
+        : undefined,
+      ...(format === "webm" ? {} : { fastStart: "in-memory" }),
+    });
+
+    videoEncoder = new VideoEncoder({
+      output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+      error: (e) => { encodeError = e; },
+    });
+    videoEncoder.configure({
+      codec: fastVideoCodec(format),
+      width: w,
+      height: h,
+      bitrate,
+      framerate: FAST_EXPORT_FPS,
+      latencyMode: "quality",
+    });
+
+    if (audio) {
+      audioEncoder = new AudioEncoder({
+        output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+        error: (e) => { encodeError = e; },
+      });
+      audioEncoder.configure({
+        codec: format === "webm" ? "opus" : "mp4a.40.2",
+        sampleRate: audio.sampleRate,
+        numberOfChannels: audio.channels,
+        bitrate: 128000,
+      });
+    }
+
+    // ── Video: step the clip frame by frame and encode each one ──
+    for (let i = 0; i < total; i++) {
+      if (exportAbort) { cleanup(); hideProgress(); return; }
+      const t = Math.min(state.trimOut - 0.001, state.trimIn + (i / total) * span);
+      await awaitSeek(t);
+      renderSceneScaled(ctx, sx, sy, L);
+      await waitForQueue(videoEncoder);
+      if (encodeError) throw encodeError;
+      const frame = new VideoFrame(cvs, {
+        timestamp: Math.round((i / FAST_EXPORT_FPS) * 1e6),
+        duration: Math.round(1e6 / FAST_EXPORT_FPS),
+      });
+      // A keyframe every second keeps seeking in the output usable.
+      videoEncoder.encode(frame, { keyFrame: i % FAST_EXPORT_FPS === 0 });
+      frame.close();
+      setProgress((i + 1) / total * (audio ? 0.9 : 1));
+      // Yield so the progress bar actually paints.
+      if (i % 8 === 0) await new Promise((r) => setTimeout(r, 0));
+    }
+
+    // ── Audio: one pass over the decoded span ──
+    if (audio && audioEncoder) {
+      const perFrame = AUDIO_FRAME_SAMPLES * audio.channels;
+      for (let off = 0, n = 0; off < audio.data.length; off += perFrame, n++) {
+        if (exportAbort) { cleanup(); hideProgress(); return; }
+        const slice = audio.data.subarray(off, Math.min(off + perFrame, audio.data.length));
+        const frames = Math.floor(slice.length / audio.channels);
+        if (frames <= 0) break;
+        await waitForQueue(audioEncoder);
+        if (encodeError) throw encodeError;
+        const chunk = new AudioData({
+          format: "f32",
+          sampleRate: audio.sampleRate,
+          numberOfFrames: frames,
+          numberOfChannels: audio.channels,
+          timestamp: Math.round((n * AUDIO_FRAME_SAMPLES / audio.sampleRate) * 1e6),
+          data: slice.slice(0, frames * audio.channels),
+        });
+        audioEncoder.encode(chunk);
+        chunk.close();
+        if (n % 32 === 0) {
+          setProgress(0.9 + Math.min(0.09, (off / audio.data.length) * 0.09));
+          await new Promise((r) => setTimeout(r, 0));
+        }
+      }
+      await audioEncoder.flush();
+    }
+
+    await videoEncoder.flush();
+    if (encodeError) throw encodeError;
+    muxer.finalize();
+    cleanup();
+
+    const bytes = new Uint8Array(muxer.target.buffer);
+    if (!bytes.length) throw new Error("the muxer produced no bytes");
+    setProgress(1);
+    const thumb = captureThumbnail();
+    delivered = true;
+    lastExportPath = "fast";
+    window.studio.exportEncoded(bytes, thumb, ext);
+  } catch (e) {
+    cleanup();
+    if (delivered) { console.error("Fast export threw after delivering the clip:", e); return; }
+    console.error("Fast export failed, falling back to real-time:", e);
+    // The recorder path is slower but proven; the user gets their clip either
+    // way, and never sees a dead end.
+    hideProgress();
+    exportEncoded(format);
+  }
+}
+
 function startExport() {
   if (!videoReady() || exporting) return;
   video.pause();
   requestPaint();
-  if (state.format === "gif" || state.format === "webp") exportAnimated(state.format);
-  else exportEncoded(state.format);
+  if (state.format === "gif" || state.format === "webp") { exportAnimated(state.format); return; }
+  if (fastExportSupported()) {
+    // exportFast handles its own failures, but an unhandled rejection here
+    // would leave the progress overlay up with no way forward.
+    exportFast(state.format).catch((e) => {
+      console.error("Fast export rejected:", e);
+      hideProgress();
+      exportEncoded(state.format);
+    });
+    return;
+  }
+  exportEncoded(state.format);
 }
 
 /* ───────────────────────── Load ─────────────────────────
@@ -564,7 +812,9 @@ function loadVideoSource(data) {
   state.crop = null;
   state.strokes = [];
   state.calloutCounter = 1;
+  state.selectedStrokeId = null;
   resetHistory();
+  resetView();
   resetVideoState();
   state.motion = data.motion && Array.isArray(data.motion.events) ? data.motion : null;
   showVideoStatus("Loading video…", false);
@@ -592,6 +842,9 @@ function loadVideoSource(data) {
       source.loaded = true;
       video.currentTime = 0;
       hideVideoStatus();
+      // The clip's true size only lands here, so anything sized against the
+      // source (a pending crop rect) has to be re-seeded now.
+      syncAnnotationUI();
       updateEmptyState();
       syncMotionUI();
       setFormat(state.format);
