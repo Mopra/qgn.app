@@ -48,6 +48,14 @@ const STAR_PROMPT_CAPTURE_THRESHOLD = 10;
 const REPO_URL = "https://github.com/Mopra/qgn.app";
 // How long a download may sit at the same percentage before it counts as dead.
 const UPDATE_STALL_CHECK_MS = 60000;
+// Routine update check cadence for an app that stays running for weeks.
+const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+// Minimum spacing between checks triggered by waking or unlocking the machine.
+const UPDATE_WAKE_CHECK_GAP_MS = 60 * 60 * 1000;
+// Waking from sleep leaves the network down for a bit; check after this delay.
+const UPDATE_WAKE_CHECK_DELAY_MS = 30 * 1000;
+// A feed request that has not answered in this long is treated as hung.
+const UPDATE_CHECK_TIMEOUT_MS = 5 * 60 * 1000;
 
 // Shared webPreferences for secure BrowserWindows
 const secureWebPrefs = (preloadFile, opts = {}) => ({
@@ -471,6 +479,21 @@ function createOverlay() {
     if (!isQuitting) e.preventDefault();
   });
 
+  // The overlay is a long-lived, always-on-top, screen-sized window. If its
+  // renderer ever dies it would otherwise keep showing whatever it last drew
+  // (a dimmed screen, mid-capture) with no way to clear it, because every
+  // message we send afterwards lands in a dead process. Put the window back
+  // to its passive state and reload the page so the next hotkey works.
+  overlayWindow.webContents.on("render-process-gone", (_e, details) => {
+    console.error("Overlay renderer gone:", details && details.reason);
+    if (!overlayWindow || overlayWindow.isDestroyed()) return;
+    overlayActive = false;
+    pendingScreenshot = null;
+    overlayWindow.setIgnoreMouseEvents(true);
+    overlayWindow.setContentProtection(false);
+    overlayWindow.loadFile("overlay.html");
+  });
+
   // Show window once so subsequent activations don't trigger the
   // Windows DWM window-open animation that causes a double-flash.
   overlayWindow.once("ready-to-show", () => {
@@ -543,10 +566,12 @@ function hideOverlay() {
   if (!overlayWindow || overlayWindow.isDestroyed()) return;
   overlayActive = false;
   pendingScreenshot = null;
-  overlayWindow.webContents.send("overlay-clear");
+  // Stop taking input first, then clear: the renderer also ignores anything
+  // that lands after its clear, but the less is in flight the better.
   overlayWindow.setIgnoreMouseEvents(true);
-  overlayWindow.setContentProtection(false);
   overlayWindow.blur();
+  overlayWindow.webContents.send("overlay-clear");
+  overlayWindow.setContentProtection(false);
 }
 
 /* ── Capture history ──
@@ -1980,15 +2005,37 @@ function validVersion(v) {
 }
 
 function setupAutoUpdater() {
-  getAutoUpdater().autoDownload = true;
-  getAutoUpdater().autoInstallOnAppQuit = true;
-  getAutoUpdater().logger = console;
+  const updater = getAutoUpdater();
+  // Downloads are driven from here rather than by autoDownload, so a transfer
+  // that dies mid-way can be cancelled and retried on the next check.
+  updater.autoDownload = false;
+  updater.autoInstallOnAppQuit = true;
+  updater.logger = console;
 
   // Buffer the latest status so it can be replayed after the window loads,
   // handling the race where download-progress fires before did-finish-load.
   let pendingStatus = null;
   let downloadStallTimer = null;
   let lastStallCheckPercent = -1;
+  let downloadToken = null;
+  let checkInFlight = false;
+  let lastCheckStartedAt = 0;
+  let wakeCheckTimer = null;
+
+  // electron-updater does all its networking on its own session partition, and
+  // Electron's net requests carry no timeout, so this is the one lever that
+  // makes a hung feed request or a dead download fail instead of waiting forever.
+  function abortUpdaterConnections() {
+    try {
+      const { session } = require("electron");
+      if (session && typeof session.fromPartition === "function") {
+        const ses = session.fromPartition("electron-updater", { cache: false });
+        if (ses && typeof ses.closeAllConnections === "function") ses.closeAllConnections();
+      }
+    } catch (err) {
+      console.error("Auto-update: could not abort updater connections:", err);
+    }
+  }
 
   // A download is "stalled" when the percentage has not moved for a whole
   // check window. Watching movement rather than only the first percent is what
@@ -2007,6 +2054,10 @@ function setupAutoUpdater() {
         return;
       }
       stopDownloadStallWatch();
+      // Cancelling is what frees electron-updater to start a fresh download on
+      // the next check. Without it the dead transfer is "already in progress"
+      // forever and every later check silently does nothing.
+      cancelDownload();
       sendUpdateStatus({
         status: "error",
         message: "Download stalled. Check your connection and try again.",
@@ -2021,7 +2072,37 @@ function setupAutoUpdater() {
     }
   }
 
+  function cancelDownload() {
+    if (!downloadToken) return;
+    const token = downloadToken;
+    downloadToken = null;
+    try {
+      token.cancel();
+    } catch {}
+    abortUpdaterConnections();
+  }
+
+  function startDownload() {
+    if (downloadToken) return;
+    const token = new (require("electron-updater").CancellationToken)();
+    downloadToken = token;
+    let promise;
+    try {
+      promise = updater.downloadUpdate(token);
+    } catch (err) {
+      promise = Promise.reject(err);
+    }
+    Promise.resolve(promise)
+      .catch(() => {})
+      .then(() => {
+        if (downloadToken === token) downloadToken = null;
+      });
+  }
+
   function sendUpdateStatus(data) {
+    // A downloaded update stays installable whatever a later check reports, so
+    // a failed routine check must not replace "Ready to update" with an error.
+    if (data.status === "error" && pendingStatus && pendingStatus.status === "ready") return;
     pendingStatus = data;
     if (updateWindow && !updateWindow.isDestroyed()) {
       updateWindow.webContents.send("update-status", data);
@@ -2034,7 +2115,7 @@ function setupAutoUpdater() {
     }
   }
 
-  getAutoUpdater().on("update-available", (info) => {
+  updater.on("update-available", (info) => {
     // A repeated check must not leave the previous watchdog running, or it
     // would fire a bogus "stalled" over a healthy download.
     stopDownloadStallWatch();
@@ -2045,14 +2126,16 @@ function setupAutoUpdater() {
       updateWindow.webContents.once("did-finish-load", onUpdateWindowReady);
     }
     startDownloadStallWatch();
+    startDownload();
   });
 
-  getAutoUpdater().on("download-progress", (progress) => {
+  updater.on("download-progress", (progress) => {
     sendUpdateStatus({ status: "downloading", percent: progress.percent, version: pendingUpdateVersion });
   });
 
-  getAutoUpdater().on("update-downloaded", (info) => {
+  updater.on("update-downloaded", (info) => {
     stopDownloadStallWatch();
+    downloadToken = null;
     pendingUpdateVersion = validVersion(info && info.version) || pendingUpdateVersion;
     if (updateWindow && !updateWindow.isDestroyed()) {
       sendUpdateStatus({ status: "ready", version: pendingUpdateVersion });
@@ -2065,17 +2148,71 @@ function setupAutoUpdater() {
     }
   });
 
-  getAutoUpdater().on("error", (err) => {
+  updater.on("error", (err) => {
     console.error("Auto-update error:", err);
     stopDownloadStallWatch();
     sendUpdateStatus({ status: "error", message: err?.message || "Update failed" });
   });
 
-  // Check for updates now and every 4 hours
-  getAutoUpdater().checkForUpdates().catch(() => {});
-  setInterval(() => {
-    getAutoUpdater().checkForUpdates().catch(() => {});
-  }, 4 * 60 * 60 * 1000);
+  // One check at a time. If the feed request never answers (the connection was
+  // cut by sleep or a network change), abort it so electron-updater lets go of
+  // its internal "already in progress" promise and the next check can run.
+  function checkForUpdatesNow() {
+    if (checkInFlight) return;
+    checkInFlight = true;
+    lastCheckStartedAt = Date.now();
+    let settled = false;
+    const watchdog = setTimeout(() => {
+      if (settled) return;
+      console.error("Auto-update: check timed out, aborting updater connections");
+      abortUpdaterConnections();
+      // Last resort if aborting did not settle the request: drop the stuck
+      // promise so the following check is not handed the same dead one.
+      setTimeout(() => {
+        if (settled) return;
+        if ("checkForUpdatesPromise" in updater) updater.checkForUpdatesPromise = null;
+        checkInFlight = false;
+      }, UPDATE_STALL_CHECK_MS);
+    }, UPDATE_CHECK_TIMEOUT_MS);
+    let promise;
+    try {
+      promise = updater.checkForUpdates();
+    } catch (err) {
+      promise = Promise.reject(err);
+    }
+    Promise.resolve(promise)
+      .catch(() => {})
+      .then(() => {
+        settled = true;
+        clearTimeout(watchdog);
+        checkInFlight = false;
+      });
+  }
+
+  // Sleep, lid closes and lock screens are where a laptop spends most of its
+  // time, and the timer below does not reliably fire through them. Checking
+  // shortly after the machine comes back is what keeps such a machine current.
+  function scheduleWakeCheck() {
+    if (wakeCheckTimer) clearTimeout(wakeCheckTimer);
+    wakeCheckTimer = setTimeout(() => {
+      wakeCheckTimer = null;
+      if (Date.now() - lastCheckStartedAt < UPDATE_WAKE_CHECK_GAP_MS) return;
+      checkForUpdatesNow();
+    }, UPDATE_WAKE_CHECK_DELAY_MS);
+  }
+
+  try {
+    const { powerMonitor } = require("electron");
+    if (powerMonitor && typeof powerMonitor.on === "function") {
+      powerMonitor.on("resume", scheduleWakeCheck);
+      powerMonitor.on("unlock-screen", scheduleWakeCheck);
+    }
+  } catch (err) {
+    console.error("Auto-update: powerMonitor unavailable:", err);
+  }
+
+  checkForUpdatesNow();
+  setInterval(checkForUpdatesNow, UPDATE_CHECK_INTERVAL_MS);
 }
 
 async function cliCapture() {
@@ -2286,9 +2423,9 @@ app.whenReady().then(() => {
     // leak into a frame that may still be in flight.
     overlayActive = false;
     if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.webContents.send("overlay-clear");
       overlayWindow.setIgnoreMouseEvents(true);
       overlayWindow.blur();
+      overlayWindow.webContents.send("overlay-clear");
     }
 
     const image = pendingScreenshot ? await pendingScreenshot : null;

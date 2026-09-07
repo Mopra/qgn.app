@@ -28,6 +28,8 @@ const calls = {
   clipboardImages: 0,
   clipboardText: 0,
   openedExternal: [],
+  powerEvents: new Map(),
+  closedConnections: 0,
 };
 
 const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "qgn-test-"));
@@ -155,6 +157,14 @@ const electronStub = {
     destroy() { this.destroyed = true; }
   },
   Menu: { buildFromTemplate: (tpl) => tpl },
+  powerMonitor: {
+    on(evt, cb) { calls.powerEvents.set(evt, cb); },
+  },
+  session: {
+    fromPartition() {
+      return { closeAllConnections() { calls.closedConnections++; return Promise.resolve(); } };
+    },
+  },
   dialog: { showOpenDialog: () => Promise.resolve({ canceled: true, filePaths: [] }) },
   shell: {
     openExternal(u) { calls.openedExternal.push(u); },
@@ -162,20 +172,30 @@ const electronStub = {
   },
 };
 
+const updaterEvents = new Map();
 const autoUpdaterStub = {
-  autoDownload: false,
+  autoDownload: true,
   autoInstallOnAppQuit: false,
   logger: null,
-  on() {},
+  downloads: [],
+  on(evt, cb) { if (!updaterEvents.has(evt)) updaterEvents.set(evt, []); updaterEvents.get(evt).push(cb); },
+  emit(evt, ...args) { for (const cb of updaterEvents.get(evt) || []) cb(...args); },
   checkForUpdates: () => Promise.resolve(),
+  downloadUpdate(token) { this.downloads.push(token); return Promise.resolve([]); },
   quitAndInstall() {},
 };
+class FakeCancellationToken {
+  constructor() { this.cancelled = false; }
+  cancel() { this.cancelled = true; }
+}
 
 // Intercept the two module ids main.js pulls from outside the repo.
 const originalLoad = Module._load;
 Module._load = function (request, parent, isMain) {
   if (request === "electron") return electronStub;
-  if (request === "electron-updater") return { autoUpdater: autoUpdaterStub };
+  if (request === "electron-updater") {
+    return { autoUpdater: autoUpdaterStub, CancellationToken: FakeCancellationToken };
+  }
   if (request === "electron-reloader") return () => {};
   return originalLoad.apply(this, arguments);
 };
@@ -388,6 +408,41 @@ test("a capture is written into the history ring", async () => {
   const recent = calls.trayMenus[calls.trayMenus.length - 1].find((i) => i.label === "Recent captures");
   assert.ok(recent.submenu.some((i) => typeof i.click === "function" && i.label !== "Clear recent captures"),
     "the recorded capture is not in the tray menu");
+});
+
+test("the updater drives a cancellable download and survives a failed later check", () => {
+  // autoDownload would let electron-updater own the transfer, and a transfer
+  // that dies mid-way then blocks every later check as "already in progress".
+  assert.strictEqual(autoUpdaterStub.autoDownload, false, "autoDownload must be off");
+  assert.ok(typeof autoUpdaterStub.logger === "object" && autoUpdaterStub.logger !== null, "updater logger not set");
+
+  autoUpdaterStub.emit("update-available", { version: "9.9.9" });
+  assert.strictEqual(autoUpdaterStub.downloads.length, 1, "update-available did not start a download");
+  assert.ok(autoUpdaterStub.downloads[0] instanceof FakeCancellationToken, "download has no cancellation token");
+  // A repeated check while the download runs must not start a second one.
+  autoUpdaterStub.emit("update-available", { version: "9.9.9" });
+  assert.strictEqual(autoUpdaterStub.downloads.length, 1, "a second download started over the first");
+
+  const toast = calls.windows.filter((w) => w.loadedFile === "toast-update.html").pop();
+  assert.ok(toast, "no update toast was shown");
+  const lastStatus = () => toast.webContents.sent.filter((m) => m.channel === "update-status").pop().args[0];
+
+  autoUpdaterStub.emit("update-downloaded", { version: "9.9.9" });
+  assert.strictEqual(lastStatus().status, "ready");
+  // A routine check that fails later (offline, aborted) must not replace the
+  // installable update with an error card.
+  autoUpdaterStub.emit("error", new Error("Cannot check for updates: test"));
+  assert.strictEqual(lastStatus().status, "ready", "a failed check replaced a ready update");
+
+  // Once downloaded, the next check may download again (electron-updater
+  // serves the cached file), so the previous token must have been released.
+  autoUpdaterStub.emit("update-available", { version: "9.9.9" });
+  assert.strictEqual(autoUpdaterStub.downloads.length, 2, "download token was never released");
+
+  // Laptops mostly sleep or sit locked; the updater re-checks on wake/unlock.
+  assert.ok(calls.powerEvents.has("resume"), "no resume handler on powerMonitor");
+  assert.ok(calls.powerEvents.has("unlock-screen"), "no unlock-screen handler on powerMonitor");
+  fire("update-dismiss");
 });
 
 test("capture history keeps the newest entries and prunes the rest", () => {

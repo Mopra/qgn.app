@@ -3,6 +3,38 @@
 The top section is what ships in the next release. CI publishes it as the
 release notes on GitHub, and the in-app update card links straight to it.
 
+## 0.1.20
+
+**The capture overlay can no longer get stuck on screen**
+
+Sometimes, after taking a screenshot or pressing <kbd>Esc</kbd>, the dimmed
+screen and the instruction line stayed up. Nothing you clicked or pressed
+reached them, and only restarting the app made them go away.
+
+The overlay clears itself the moment you release, while the app is still
+turning off its mouse capture. Any input already on its way in that instant
+(the last bit of mouse movement behind the release, the second click of a
+double-click, a key still going down) was read as fresh aiming and painted the
+dim back, with the overlay by then unfocused and letting the mouse through, so
+nothing could take it down again. The overlay now knows when it has been
+dismissed and ignores everything until the next hotkey press.
+
+If the overlay's renderer ever crashes it is now reloaded, instead of leaving
+its last frame on screen for the rest of the session.
+
+**Updates now reach laptops that are never restarted**
+
+A laptop that only ever sleeps could go months without an update. The check
+that runs every four hours could get stuck behind a download or feed request
+that died when the machine went to sleep, and nothing ever cleared it, so every
+later check was quietly skipped until the app was restarted. Now:
+
+- A download that stops moving is cancelled and retried on the next check,
+  rather than blocking every check after it.
+- A check that gets no answer within five minutes is aborted the same way.
+- The app also checks shortly after the machine wakes or is unlocked, at most
+  once an hour, instead of relying on the timer alone.
+
 ## 0.1.19
 
 **You can capture a whole window by clicking it, and now the overlay says so**

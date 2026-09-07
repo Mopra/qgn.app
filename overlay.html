@@ -422,6 +422,15 @@
       //      | "adjusting" (rect exists, handles live, waiting on confirm)
       let phase = "idle";
       let mode = "screenshot";
+      // Whether main has handed us the screen. "idle" alone cannot tell aiming
+      // apart from cleared: both leave phase at "idle", and after a capture the
+      // window still receives whatever input was already in flight (a mouse
+      // move behind the release, the second click of a double-click, a key
+      // still going down). Without this flag that straggler re-painted the
+      // full-screen dim and instruction line with the window already ignoring
+      // the mouse and unfocused, so nothing could ever take it down again
+      // short of the next activation or a restart.
+      let active = false;
       // false (default): releasing the mouse captures instantly; true: it
       // settles the selection for adjustment. Alt at release flips whichever
       // is active for that one capture.
@@ -712,6 +721,7 @@
       }
 
       function scheduleRender() {
+        if (!active) return;
         if (!rafId) rafId = requestAnimationFrame(renderFrame);
       }
 
@@ -724,7 +734,7 @@
       let loupeWanted = false;
 
       function loupeActive() {
-        return (phase === "idle" || phase === "drawing") && $rec.hidden;
+        return active && (phase === "idle" || phase === "drawing") && $rec.hidden;
       }
 
       function requestLoupe() {
@@ -854,6 +864,7 @@
 
       /* ── Pointer ── */
       document.addEventListener("mousedown", (e) => {
+        if (!active) return;
         if (e.button !== 0) return;
         window.qgn.closeMicDropdown();
         if (e.target.closest("#bar")) return; // buttons own their own clicks
@@ -880,6 +891,7 @@
       });
 
       document.addEventListener("mousemove", (e) => {
+        if (!active) return;
         cursorX = e.clientX;
         cursorY = e.clientY;
 
@@ -928,6 +940,7 @@
       }
 
       document.addEventListener("mouseup", (e) => {
+        if (!active) { drag = null; return; }
         if (!drag) return;
         const wasNew = drag.type === "new";
         const moved = drag.moved;
@@ -968,6 +981,7 @@
 
       // Double-clicking inside a settled selection takes it.
       document.addEventListener("dblclick", (e) => {
+        if (!active) return;
         if (phase === "adjusting" && pointInRect(e.clientX, e.clientY, sel)) {
           confirmSelectionNow();
         }
@@ -975,16 +989,19 @@
 
       $btnConfirm.addEventListener("click", (e) => {
         e.stopPropagation();
+        if (!active) return;
         confirmSelectionNow();
       });
 
       $btnCancel.addEventListener("click", (e) => {
         e.stopPropagation();
+        if (!active) return;
         clearSelection();
       });
 
       /* ── Keyboard ── */
       document.addEventListener("keydown", (e) => {
+        if (!active) return;
         if (e.key === "Escape") {
           // Layered back-out: drop the selection first, leave only if there
           // isn't one.
@@ -1045,18 +1062,24 @@
       }
 
       function reset() {
+        active = true;
         mode = "screenshot";
         $btnConfirm.textContent = "Capture";
         clearSelection();
       }
 
       function resetForVideo() {
+        active = true;
         mode = "video";
         $btnConfirm.textContent = "Record";
         clearSelection();
       }
 
+      // The border is passive: main has the window ignoring the mouse, and any
+      // input that still reaches us is a straggler.
       function showRecordingBorder(region) {
+        active = false;
+        resetState();
         hideAllSelection();
         const rs = $rec.style;
         rs.left = region.x + "px";
@@ -1071,6 +1094,7 @@
       }
 
       function clear() {
+        active = false;
         resetState();
         $btnConfirm.textContent = "Capture";
         hideAllSelection();

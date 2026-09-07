@@ -37,16 +37,14 @@ const WINDOW_RECTS = [
   { x: 600, y: 150, w: 300, h: 200, title: "Browser <img src=x onerror=alert(1)>" },
 ];
 let magnifyCalls = 0;
+// A 1x1 transparent PNG is enough: the loupe only has to not throw.
+const PNG_1x1 =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 ipcMain.handle("overlay-window-rects", () => WINDOW_RECTS);
 ipcMain.handle("overlay-magnify", (_e, req) => {
   magnifyCalls++;
   if (!req || !Number.isFinite(req.x)) return null;
-  // A 1x1 transparent PNG is enough: the loupe only has to not throw.
-  return {
-    dataUrl:
-      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-    cx: 0, cy: 0, w: 1, h: 1, hex: "#112233",
-  };
+  return { dataUrl: PNG_1x1, cx: 0, cy: 0, w: 1, h: 1, hex: "#112233" };
 });
 
 function evalIn(win, code) {
@@ -309,7 +307,10 @@ async function run() {
     instantHint.includes("Alt to adjust"), instantHint);
 
   // ── 10b. Alt at release flips the behaviour for that one capture ──
-  // Instant mode + Alt: the selection settles instead of being taken.
+  // Instant mode + Alt: the selection settles instead of being taken. (Each
+  // capture clears and disarms the overlay, so every drag needs an activation.)
+  win.webContents.send("activate-capture", { displayId: "1", confirmSelection: false });
+  await wait(200);
   ipcLog.length = 0;
   await drag(win, 200, 200, 330, 300, ["alt"]);
   s = await state(win);
@@ -339,6 +340,8 @@ async function run() {
   await drag(win, 200, 200, 496, 396);
   await wait(100);
   const snapped2 = (ipcLog.find((e) => e.channel === "capture-region") || { args: [{}] }).args[0];
+  win.webContents.send("activate-capture", { displayId: "1", confirmSelection: false });
+  await wait(200);
   ipcLog.length = 0;
   await drag(win, 200, 200, 496, 396, ["control"]);
   await wait(100);
@@ -399,7 +402,96 @@ async function run() {
   const loupeShown = await evalIn(win, `$loupe.classList.contains("show")`);
   record("the loupe renders the crop it gets back", loupeShown === true, String(loupeShown));
 
-  // ── 14. Nothing threw along the way ──
+  // ── 14. Input that lands after a clear must not bring the overlay back ──
+  // The renderer clears itself the moment a capture is taken (or Escape is
+  // pressed) while main is still turning the mouse off. Anything already in
+  // flight at that instant (a move behind the release, the second click of a
+  // double-click, a key still going down, a loupe reply) used to be read as
+  // fresh aiming and repainted the full-screen dim and instruction line, with
+  // the window by then unfocused and ignoring the mouse: stuck until restart.
+  function visible() {
+    return evalIn(win, `({
+      phase, active,
+      dim: !$dimT.hidden || !$dimL.hidden || !$dimR.hidden || !$dimB.hidden,
+      noSel: !$noSel.hidden, instr: !$instr.hidden, snap: !$snap.hidden,
+      sel: !$sel.hidden, bar: $bar.classList.contains("show"),
+      loupe: $loupe.classList.contains("show"),
+    })`);
+  }
+  const ENDS = new Set(["capture-region", "start-video-recording", "cancel"]);
+  const ends = () => ipcLog.filter((e) => ENDS.has(e.channel)).map((e) => e.channel);
+  const nothingShown = (v) =>
+    v.phase === "idle" && v.active === false && !v.dim && !v.noSel && !v.instr &&
+    !v.snap && !v.sel && !v.bar && !v.loupe;
+
+  // Stragglers: a move over a known window, a click on it, a drag, keys that
+  // would each capture, and a loupe crop resolving late.
+  async function stragglers() {
+    mouse(win, "mouseMove", 650, 200);
+    await wait(30);
+    mouse(win, "mouseDown", 650, 200);
+    await wait(30);
+    mouse(win, "mouseMove", 700, 240);
+    await wait(30);
+    mouse(win, "mouseUp", 700, 240);
+    await wait(30);
+    mouse(win, "mouseDown", 650, 200);
+    await wait(30);
+    mouse(win, "mouseUp", 650, 200);
+    key(win, "Return");
+    key(win, "Space");
+    await evalIn(win, `(() => {
+      drawLoupe({ dataUrl: ${JSON.stringify(PNG_1x1)}, cx: 0, cy: 0, w: 1, h: 1, hex: "#000000" }, 10, 10);
+      return true;
+    })()`);
+    // Last of all a plain move over a window: the one straggler that, on its
+    // own, used to bring the whole dimmed screen back.
+    mouse(win, "mouseMove", 650, 200);
+    await wait(150);
+  }
+
+  // After a capture.
+  win.webContents.send("activate-capture", { displayId: "1", confirmSelection: false });
+  await wait(200);
+  ipcLog.length = 0;
+  await drag(win, 200, 200, 320, 290);
+  const armed = await visible();
+  const sentByCapture = ends();
+  await stragglers();
+  let late = await visible();
+  record("the overlay is cleared and disarmed the moment a capture is taken",
+    sentByCapture.join() === "capture-region" && nothingShown(armed),
+    JSON.stringify({ ipc: sentByCapture, armed }));
+  record("input arriving after a capture does not repaint the overlay",
+    nothingShown(late), JSON.stringify(late));
+  record("nor does it fire a second capture",
+    ends().join() === "capture-region", ends().join(", "));
+
+  // After Escape.
+  win.webContents.send("activate-capture", { displayId: "1", confirmSelection: false });
+  await wait(200);
+  ipcLog.length = 0;
+  key(win, "Escape");
+  await wait(60);
+  await stragglers();
+  late = await visible();
+  record("input arriving after Escape does not repaint the overlay",
+    ends().join() === "cancel" && nothingShown(late),
+    JSON.stringify({ ipc: ends(), late }));
+
+  // And the overlay still comes back on the next activation.
+  win.webContents.send("activate-capture", { displayId: "1", confirmSelection: false });
+  await wait(200);
+  mouse(win, "mouseMove", 650, 200);
+  await wait(120);
+  const rearmed = await visible();
+  record("the next activation arms the overlay again",
+    rearmed.active === true && rearmed.noSel && rearmed.instr && rearmed.snap,
+    JSON.stringify(rearmed));
+  key(win, "Escape");
+  await wait(60);
+
+  // ── 15. Nothing threw along the way ──
   record("no uncaught page errors", pageErrors.length === 0, pageErrors.join("\n      "));
   record("no console errors", consoleErrors.length === 0, consoleErrors.join("\n      "));
 
