@@ -77,6 +77,7 @@ class FakeBrowserWindow {
   isVisible() { return this.visible; }
   focus() {} blur() {}
   setAlwaysOnTop() {} setIgnoreMouseEvents() {} setContentProtection() {}
+  setVisibleOnAllWorkspaces() {}
   setBounds(b) { Object.assign(this.bounds, b); }
   getBounds() { return { ...this.bounds }; }
 }
@@ -199,6 +200,12 @@ Module._load = function (request, parent, isMain) {
   if (request === "electron-reloader") return () => {};
   return originalLoad.apply(this, arguments);
 };
+
+// The stub and these tests describe the Windows build (hotkeys, updater, snap
+// helper), so pin the platform: on a macOS CI runner main.js would otherwise
+// take its Mac paths and every Windows expectation would fail.
+const realPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+Object.defineProperty(process, "platform", { value: "win32" });
 
 let bootError = null;
 try {
@@ -503,6 +510,7 @@ async function runMainTests() {
     }
   }
   Module._load = originalLoad;
+  Object.defineProperty(process, "platform", realPlatform);
   try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch {}
   if (!failed) console.log(`OK: ${cases.length} main-process boot test(s) passed.`);
   return failed;
