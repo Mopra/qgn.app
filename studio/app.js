@@ -519,4 +519,13 @@ function onKeyDown(e) {
   if (TOOL_KEYS[k]) selectTool(TOOL_KEYS[k]);
 }
 
+/* The shortcuts above take Cmd as well as Ctrl, so on a Mac the labels say
+   Cmd, which is the key a Mac user reaches for. */
+if (/Mac/.test(navigator.platform)) {
+  for (const el of document.querySelectorAll("kbd, [title], .empty-sub")) {
+    if (el.title) el.title = el.title.replace(/\bCtrl\b/g, "Cmd");
+    if (el.matches("kbd, .empty-sub")) el.textContent = el.textContent.replace(/\bCtrl\b/g, "Cmd");
+  }
+}
+
 init();

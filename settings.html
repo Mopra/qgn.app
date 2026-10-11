@@ -240,9 +240,16 @@
         return row;
       }
 
+      // macOS has both Control and Command, so they stay distinct there;
+      // elsewhere either one means Ctrl.
+      const isMac = /Mac/.test(navigator.platform);
+
       function keyToAccelerator(e) {
         const parts = [];
-        if (e.ctrlKey || e.metaKey) parts.push("CommandOrControl");
+        if (isMac) {
+          if (e.ctrlKey) parts.push("Control");
+          if (e.metaKey) parts.push("Command");
+        } else if (e.ctrlKey || e.metaKey) parts.push("CommandOrControl");
         if (e.altKey) parts.push("Alt");
         if (e.shiftKey) parts.push("Shift");
 
@@ -267,9 +274,12 @@
       }
 
       function displayAccelerator(acc) {
+        const cmdOrCtrl = isMac ? "Cmd" : "Ctrl";
         return acc
-          .replace("CommandOrControl", "Ctrl")
-          .replace("CmdOrCtrl", "Ctrl")
+          .replace("CommandOrControl", cmdOrCtrl)
+          .replace("CmdOrCtrl", cmdOrCtrl)
+          .replace("Control", "Ctrl")
+          .replace("Command", "Cmd")
           .replace(/\+/g, " + ");
       }
 

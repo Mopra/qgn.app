@@ -2,7 +2,7 @@
   "name": "qgn",
   "productName": "QGN",
   "version": "0.1.20",
-  "description": "Instant screenshot capture and screen recording tool for Windows. Clipboard-first, floating previews, annotation, multi-monitor. Open source.",
+  "description": "Instant screenshot capture and screen recording tool for Windows and macOS. Clipboard-first, floating previews, annotation, multi-monitor. Open source.",
   "license": "MIT",
   "homepage": "https://qgn.app",
   "repository": {
@@ -21,11 +21,13 @@
     "smoke:overlay": "node -e \"delete process.env.ELECTRON_RUN_AS_NODE; process.exit(require('child_process').spawnSync(require('electron'), ['scripts/smoke-overlay.js'], {stdio:'inherit'}).status || 0)\"",
     "test": "npm run check && npm run smoke && npm run smoke:overlay",
     "build": "node scripts/check.js && electron-builder --win",
+    "build:mac": "node scripts/check.js && electron-builder --mac --arm64",
     "generate-icons": "node scripts/generate-icons.js"
   },
   "build": {
     "appId": "com.mopra.qgn",
     "npmRebuild": false,
+    "afterPack": "scripts/after-pack.js",
     "productName": "QGN",
     "directories": {
       "output": "dist"
@@ -45,12 +47,26 @@
     ],
     "asarUnpack": [
       "node_modules/sharp/**/*",
+      "node_modules/@img/**/*",
       "node_modules/uiohook-napi/**/*",
       "lib/window-rects.ps1"
     ],
     "win": {
       "target": "nsis",
       "icon": "icons/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "icons/icon-512.png",
+      "category": "public.app-category.productivity",
+      "identity": null,
+      "extendInfo": {
+        "LSUIElement": true,
+        "NSMicrophoneUsageDescription": "QGN uses the microphone only when you record your screen with the microphone turned on."
+      }
+    },
+    "dmg": {
+      "artifactName": "QGN-mac-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,

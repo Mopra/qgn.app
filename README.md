@@ -120,6 +120,18 @@ Grab the latest installer from the [Releases](https://github.com/Mopra/qgn.app/r
 
 **[Download QGN-Setup.exe](https://github.com/Mopra/qgn.app/releases/latest/download/QGN-Setup.exe)** (85 MB, Windows 10+)
 
+### macOS (beta)
+
+**[Download QGN-mac-arm64.dmg](https://github.com/Mopra/qgn.app/releases/latest/download/QGN-mac-arm64.dmg)** (Apple Silicon)
+
+The Mac build is new and not yet signed by Apple, so a few things differ from Windows:
+
+- **First open:** macOS will block it. Open it once, then go to System Settings > Privacy & Security and click **Open Anyway**.
+- **Permissions:** QGN asks for Screen Recording on the first capture (quit and reopen QGN after allowing it). Cursor effects in Studio also need Accessibility.
+- **Hotkeys:** `Control+Q` to capture and `Control+Shift+Q` to record, since `Cmd+Q` quits apps on a Mac.
+- **Updates:** no auto-update. QGN tells you when a new version is out and links to the download. Because each build is signed ad hoc, macOS may ask for the permissions again after updating.
+- **Not on Mac yet:** snap-to-window during selection, and recording system audio (the microphone works).
+
 ## Development
 
 ### Prerequisites
@@ -142,7 +154,7 @@ npm start
 npm run build
 ```
 
-Produces a Windows NSIS installer in the `dist/` directory.
+Produces a Windows NSIS installer in the `dist/` directory. On a Mac, `npm run build:mac` produces `dist/QGN-mac-arm64.dmg`.
 
 ### Project Structure
 

@@ -45,6 +45,29 @@ async function main() {
     console.log(`  ${name}`);
   }
 
+  // macOS menu bar "template" icons: black plus alpha only, so macOS can tint
+  // them for light and dark menu bars. The light glyph is knocked out of the
+  // tile, leaving a dark rounded square with the sunburst cut through it.
+  for (const s of [18, 36]) {
+    const name = s === 18 ? "trayTemplate.png" : "trayTemplate@2x.png";
+    const { data, info } = await squared
+      .clone()
+      .resize(s, s, { kernel: sharp.kernel.lanczos3 })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const out = Buffer.alloc(s * s * 4);
+    for (let i = 0; i < s * s; i++) {
+      const [r, g, b, a] = data.subarray(i * 4, i * 4 + 4);
+      const light = Math.min(r, g, b) / 255; // white glyph is near 1, tile near 0
+      out[i * 4 + 3] = Math.round(a * (1 - light));
+    }
+    await sharp(out, { raw: { width: s, height: s, channels: 4 } })
+      .png()
+      .toFile(path.join(ICONS_DIR, name));
+    console.log(`  ${name}`);
+  }
+
   // Windows .ico (PNG-encoded ICO format)
   const icoSizes = [16, 32, 48, 64, 128, 256];
   const pngBuffers = icoSizes.map((s) => ({

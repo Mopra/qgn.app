@@ -12,9 +12,13 @@ const {
   Menu,
   dialog,
   shell,
+  systemPreferences,
+  Notification,
+  net,
 } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const isMac = process.platform === "darwin";
 const { assembleAnimation } = require("./lib/animation.js");
 const { sanitizeStudioColors, sanitizeStudioGradients, DEFAULT_STUDIO_COLORS } = require("./lib/palette.js");
 const { STUDIO_VIDEO_EXTS, fileExt, videoMimeForPath, canOpenInStudio } = require("./lib/media.js");
@@ -83,6 +87,11 @@ if (!cliMode) {
     // triggers a capture on the existing instance instead of starting a new one.
     app.on("second-instance", () => {
       if (overlayReady) showOverlay();
+    });
+    // macOS doesn't start a second instance when the app is opened again
+    // from Finder or Spotlight; it sends "activate" to the running one.
+    app.on("activate", () => {
+      if (overlayReady && !overlayActive) showOverlay();
     });
   }
 }
@@ -168,10 +177,11 @@ function getStudioGradients() {
   return cleaned === null ? [] : cleaned;
 }
 
-const defaultHotkeys = {
-  capture: "CommandOrControl+Q",
-  record: "CommandOrControl+Shift+Q",
-};
+// Control, not CommandOrControl, on macOS: Cmd+Q is Quit in every Mac app, and
+// a global shortcut on it would take Quit away from all of them.
+const defaultHotkeys = isMac
+  ? { capture: "Control+Q", record: "Control+Shift+Q" }
+  : { capture: "CommandOrControl+Q", record: "CommandOrControl+Shift+Q" };
 
 function getStartOnStartup() {
   const settings = loadSettings();
@@ -187,11 +197,12 @@ function getHotkeys() {
 }
 
 function hotkeyToLabel(accelerator) {
+  const cmdOrCtrl = isMac ? "Cmd" : "Ctrl";
   return accelerator
-    .replace("CommandOrControl", "Ctrl")
-    .replace("CmdOrCtrl", "Ctrl")
+    .replace("CommandOrControl", cmdOrCtrl)
+    .replace("CmdOrCtrl", cmdOrCtrl)
     .replace("Control", "Ctrl")
-    .replace("Command", "Ctrl");
+    .replace("Command", "Cmd");
 }
 
 function registerHotkeys() {
@@ -467,11 +478,18 @@ function createOverlay() {
     movable: false,
     fullscreenable: false,
     show: false,
+    // macOS keeps ordinary windows below the menu bar; the overlay has to
+    // cover the whole display, menu bar included.
+    enableLargerThanScreen: true,
+    hasShadow: false,
     webPreferences: secureWebPrefs("preload.js", { backgroundThrottling: false }),
   });
 
   overlayWindow.loadFile("overlay.html");
   overlayWindow.setAlwaysOnTop(true, "screen-saver");
+  // On macOS a window lives on one Space; without this the overlay would open
+  // on whichever desktop it was created on, or behind a full-screen app.
+  if (isMac) overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
   // Prevent the OS or Electron from destroying this long-lived window,
   // but allow it during app quit so the app can actually exit.
@@ -503,6 +521,40 @@ function createOverlay() {
   });
 }
 
+// macOS gates screen capture behind a per-app Screen Recording permission.
+// Without it desktopCapturer still returns a frame, but only of the wallpaper,
+// so a capture would silently come out wrong. Returns true (and explains, once
+// at a time) when capture can't go ahead yet.
+let screenPermissionDialogOpen = false;
+function screenAccessMissing() {
+  if (!isMac || systemPreferences.getMediaAccessStatus("screen") === "granted") return false;
+  if (screenPermissionDialogOpen) return true;
+  screenPermissionDialogOpen = true;
+  (async () => {
+    // Asking for sources is what puts QGN in the Screen Recording list, and
+    // the very first time it also brings up macOS's own prompt.
+    await desktopCapturer
+      .getSources({ types: ["screen"], thumbnailSize: { width: 1, height: 1 } })
+      .catch(() => {});
+    app.focus({ steal: true });
+    const { response } = await dialog.showMessageBox({
+      type: "info",
+      message: "QGN needs permission to capture the screen",
+      detail:
+        "Turn on QGN in System Settings > Privacy & Security > Screen & System Audio Recording, then quit and reopen QGN.",
+      buttons: ["Open System Settings", "Not now"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response === 0) {
+      shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture");
+    }
+  })()
+    .catch((e) => console.error("Screen permission prompt failed:", e))
+    .finally(() => { screenPermissionDialogOpen = false; });
+  return true;
+}
+
 function showOverlay() {
   if (!overlayWindow || overlayWindow.isDestroyed() || !overlayReady) return;
 
@@ -514,6 +566,8 @@ function showOverlay() {
     else hideOverlay();
     return;
   }
+
+  if (screenAccessMissing()) return;
 
   overlayActive = true;
 
@@ -536,6 +590,9 @@ function showOverlay() {
     displayId: String(display.id),
     confirmSelection: getConfirmSelection(),
   });
+  // A menu bar app is never the active app on macOS when its hotkey fires, so
+  // the overlay would get no keys (Esc, Space, arrows) without taking focus.
+  if (isMac) app.focus({ steal: true });
   overlayWindow.focus();
 }
 
@@ -925,6 +982,7 @@ async function handleCaptureData(pngBuffer) {
 
 // Capture the whole display under the cursor (cursor-free), no region select.
 async function captureFullScreen() {
+  if (screenAccessMissing()) return;
   try {
     const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
     const sf = display.scaleFactor || 1;
@@ -1450,15 +1508,19 @@ const motion = {
   events: [],
 };
 let pendingMotion = null; // finalized capture, consumed by the next saveRecording
+let motionAccessibilityAsked = false; // macOS: prompt for Accessibility once per run
 
-// Map a raw global uiohook screen point (physical px on Windows) to the
-// recorded region's normalized space [0..1]. Returns null for points well
-// outside the region so stray desktop movement doesn't pollute the track.
+// Map a raw global uiohook screen point to the recorded region's normalized
+// space [0..1]. Raw points are physical px on Windows but points (logical px)
+// on macOS, so there they are scaled up to match the physical-px anchors.
+// Returns null for points well outside the region so stray desktop movement
+// doesn't pollute the track.
 function normalizeMotionPoint(rawX, rawY) {
   const r = motion.region;
   if (!r || !(r.width > 0) || !(r.height > 0)) return null;
-  const physX = rawX - motion.displayOrigin.x;
-  const physY = rawY - motion.displayOrigin.y;
+  const k = isMac ? videoScaleFactor || 1 : 1;
+  const physX = rawX * k - motion.displayOrigin.x;
+  const physY = rawY * k - motion.displayOrigin.y;
   const nx = (physX - r.x) / r.width;
   const ny = (physY - r.y) / r.height;
   if (nx < -0.2 || nx > 1.2 || ny < -0.2 || ny > 1.2) return null;
@@ -1487,6 +1549,16 @@ function pushMotionEvent(type, rawX, rawY, extra) {
 // showOverlayForVideo/beginVideoRecording. Buffering stays off until the
 // renderer signals recording actually started (post-countdown).
 function startMotionCapture(region, displayOrigin) {
+  // macOS only lets an app watch global mouse input with the Accessibility
+  // permission. Without it, ask once (macOS shows its own prompt) and record
+  // without a motion track rather than starting a hook that can't see anything.
+  if (isMac && !systemPreferences.isTrustedAccessibilityClient(false)) {
+    if (!motionAccessibilityAsked) {
+      motionAccessibilityAsked = true;
+      systemPreferences.isTrustedAccessibilityClient(true);
+    }
+    return;
+  }
   const hook = getUiohook();
   if (!hook || !hook.uIOhook) return;
   motion.region = region;
@@ -1591,6 +1663,8 @@ async function showOverlayForVideo() {
     return;
   }
 
+  if (screenAccessMissing()) return;
+
   overlayActive = true;
 
   const cursorPoint = screen.getCursorScreenPoint();
@@ -1633,6 +1707,7 @@ async function showOverlayForVideo() {
   overlayWindow.webContents.send("overlay-reset-video", {
     confirmSelection: getConfirmSelection(),
   });
+  if (isMac) app.focus({ steal: true });
   overlayWindow.focus();
 
   // Show control bar in setup mode (audio toggles only) alongside the overlay
@@ -1888,6 +1963,9 @@ function rebuildTrayMenu() {
     { label: "Open video in Studio...", click: openVideoFileInStudio },
     { type: "separator" },
     { label: "Settings...", click: toggleSettingsWindow },
+    ...(macUpdate
+      ? [{ label: `Download QGN ${macUpdate.version}...`, click: () => shell.openExternal(macUpdate.url) }]
+      : []),
     { type: "separator" },
     { label: "Quit", click: () => app.quit() },
   ]);
@@ -1948,8 +2026,10 @@ function updateTrayTooltip() {
 }
 
 function createTray() {
+  // macOS menu bar icons are monochrome "template" images that the system
+  // tints for light and dark menu bars; the "Template" suffix tells it to.
   const trayIcon = nativeImage.createFromPath(
-    path.join(__dirname, "icons", "tray.png")
+    path.join(__dirname, "icons", isMac ? "trayTemplate.png" : "tray.png")
   );
   tray = new Tray(trayIcon);
   updateTrayTooltip();
@@ -2002,6 +2082,49 @@ function showUpdateToast() {
 let pendingUpdateVersion = null;
 function validVersion(v) {
   return typeof v === "string" && /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(v) ? v : null;
+}
+
+// macOS builds are not signed by Apple, and macOS refuses to let an unsigned
+// app replace itself, so electron-updater can't install there. Instead, check
+// the latest GitHub release and offer the download in the menu bar menu.
+let macUpdate = null; // { version, url } once a newer release is found
+
+function isNewerVersion(latest, current) {
+  const a = String(latest).replace(/^v/, "").split(".").map((n) => parseInt(n, 10) || 0);
+  const b = String(current).split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
+  }
+  return false;
+}
+
+function setupMacUpdateCheck() {
+  async function check() {
+    try {
+      const res = await net.fetch("https://api.github.com/repos/Mopra/qgn.app/releases/latest", {
+        headers: { Accept: "application/vnd.github+json" },
+      });
+      if (!res.ok) return;
+      const release = await res.json();
+      const version = String(release.tag_name || "").replace(/^v/, "");
+      if (!/^\d+\.\d+\.\d+$/.test(version) || !isNewerVersion(version, app.getVersion())) return;
+      if (macUpdate && macUpdate.version === version) return;
+      macUpdate = { version, url: "https://github.com/Mopra/qgn.app/releases/latest" };
+      rebuildTrayMenu();
+      if (Notification.isSupported()) {
+        const n = new Notification({
+          title: `QGN ${version} is available`,
+          body: "Click to download it, or find it in the QGN menu.",
+        });
+        n.on("click", () => shell.openExternal(macUpdate.url));
+        n.show();
+      }
+    } catch (e) {
+      console.error("Update check failed:", e);
+    }
+  }
+  check();
+  setInterval(check, UPDATE_CHECK_INTERVAL_MS);
 }
 
 function setupAutoUpdater() {
@@ -2303,7 +2426,8 @@ app.whenReady().then(() => {
   });
 
   registerHotkeys();
-  setupAutoUpdater();
+  if (isMac) setupMacUpdateCheck();
+  else setupAutoUpdater();
   showWelcome();
 
   ipcMain.on("welcome-close", () => {

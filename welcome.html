@@ -262,11 +262,12 @@
 
     <script>
       function displayAccelerator(accel) {
+        const cmdOrCtrl = /Mac/.test(navigator.platform) ? "Cmd" : "Ctrl";
         return accel
-          .replace("CommandOrControl", "Ctrl")
-          .replace("CmdOrCtrl", "Ctrl")
+          .replace("CommandOrControl", cmdOrCtrl)
+          .replace("CmdOrCtrl", cmdOrCtrl)
           .replace("Control", "Ctrl")
-          .replace("Command", "Ctrl")
+          .replace("Command", "Cmd")
           .replace(/\+/g, " + ");
       }
 
